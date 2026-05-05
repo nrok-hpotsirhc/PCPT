@@ -47,7 +47,7 @@ export function PwaApp() {
     const totalCost = rows.reduce((s, r) => s + r.cost, 0);
     const pnl       = total - totalCost;
     const pct       = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
-    const len = 31;
+    const len = 90;
     const history = Array<number>(len).fill(0);
     rows.forEach(r => {
       r.history.forEach((p, i) => { if (i < len) history[i] = (history[i] ?? 0) + p * r.uc.quantity; });

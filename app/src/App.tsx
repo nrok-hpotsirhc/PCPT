@@ -120,12 +120,19 @@ function Sidebar({ tab, onChange, isDark, onTheme, locale, onLocale, totalValue,
     }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 20px' }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 11, background: 'var(--accent-grad)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'white', fontWeight: 800, fontSize: 15,
-          boxShadow: '0 4px 14px var(--accent-shadow)',
-        }}>P</div>
+        <svg viewBox="0 0 512 512" width={36} height={36} style={{ flexShrink: 0 }}>
+          <circle cx="256" cy="256" r="232" fill="#C8DCFA"/>
+          <path d="M24 256 A232 232 0 0 1 488 256 Z" fill="#A8C8F5"/>
+          <rect x="24" y="238" width="464" height="36" fill="white"/>
+          <clipPath id="pball-clip"><rect x="0" y="0" width="512" height="238"/></clipPath>
+          <circle cx="256" cy="256" r="155" stroke="#1A6BFF" strokeWidth="16" fill="none" clipPath="url(#pball-clip)"/>
+          <circle cx="256" cy="256" r="60" fill="white"/>
+          <circle cx="256" cy="256" r="44" fill="#C8DCFA"/>
+          <circle cx="256" cy="256" r="24" fill="#A8C8F5"/>
+          <circle cx="256" cy="256" r="232" stroke="#1A6BFF" strokeWidth="22" fill="none"/>
+          <line x1="24" y1="256" x2="488" y2="256" stroke="#1A6BFF" strokeWidth="22"/>
+          <circle cx="256" cy="256" r="60" stroke="#1A6BFF" strokeWidth="18" fill="none"/>
+        </svg>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)' }}>PCPT</div>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Card Portfolio</div>
@@ -325,7 +332,7 @@ export function App() {
     const totalCost = rows.reduce((s, r) => s + r.cost, 0);
     const pnl = total - totalCost;
     const pct = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
-    const len = 31;
+    const len = 90;
     const history = Array<number>(len).fill(0);
     rows.forEach(r => {
       r.history.forEach((p, i) => { if (i < len) history[i] = (history[i] ?? 0) + p * r.uc.quantity; });

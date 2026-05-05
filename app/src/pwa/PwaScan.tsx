@@ -31,6 +31,9 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
   const phaseRef       = useRef<Phase>('permission');
   const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingStreamRef = useRef<MediaStream | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const workerRef      = useRef<any>(null);
+  const isBusyRef      = useRef(false);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
@@ -94,7 +97,11 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
     streamRef.current = null;
   }, []);
 
-  useEffect(() => () => stopCamera(), [stopCamera]);
+  useEffect(() => () => {
+    stopCamera();
+    workerRef.current?.terminate?.().catch(() => {});
+    workerRef.current = null;
+  }, [stopCamera]);
 
   async function enableCamera() {
     setError(null);
@@ -149,11 +156,54 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       if (phaseRef.current === 'viewfinder') void runScan();
-    }, 2500);
+    }, 3500);
+  }
+
+  // ── Image preprocessing (scale 4x + grayscale + contrast) ──────────────────
+  function preprocessForOcr(src: HTMLCanvasElement, scale = 4): HTMLCanvasElement {
+    const out = document.createElement('canvas');
+    out.width  = Math.max(1, src.width  * scale);
+    out.height = Math.max(1, src.height * scale);
+    const ctx = out.getContext('2d');
+    if (!ctx) return src;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, out.width, out.height);
+    const img = ctx.getImageData(0, 0, out.width, out.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
+      const c = Math.min(255, Math.max(0, (gray - 118) * 2.4 + 118));
+      d[i] = d[i + 1] = d[i + 2] = c;
+    }
+    ctx.putImageData(img, 0, 0);
+    return out;
+  }
+
+  // ── Parse card number from OCR text ────────────────────────────────────────
+  // Pokémon cards always print "NNN/NNN" at the bottom; that's the most reliable signal
+  function parseCardNumber(text: string): string | null {
+    // Standard: 025/198, 12/130, 1/30 etc.
+    const m1 = text.match(/\b(\d{1,3})\s*[\/\\|l]\s*\d{2,4}\b/);
+    if (m1 && m1[1]) return m1[1].replace(/^0+/, '') || '0';
+    // Promo/special: SWSH001, SV001, PR-SW001 etc.
+    const m2 = text.match(/\b(SWSH|SV[PEH]?|SM|BW|XY|DP|PL|PR)\s*[-]?\s*(\d{1,4})\b/i);
+    if (m2 && m2[1] && m2[2]) return `${m2[1].toUpperCase()}${m2[2]}`;
+    return null;
+  }
+
+  // ── Get or lazily init the Tesseract worker (singleton) ────────────────────
+  async function getWorker() {
+    if (!workerRef.current) {
+      const { createWorker } = await import('tesseract.js');
+      workerRef.current = await createWorker('eng');
+    }
+    return workerRef.current;
   }
 
   async function runScan() {
-    if (phaseRef.current !== 'viewfinder') return;
+    if (phaseRef.current !== 'viewfinder' || isBusyRef.current) return;
+    isBusyRef.current = true;
     setPhase('matching');
     setScanCount(c => c + 1);
     try {
@@ -161,40 +211,77 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
       const canvas = canvasRef.current;
       if (!video || !canvas) throw new Error('no refs');
 
-      // Capture full frame
       const vw = video.videoWidth  || 640;
       const vh = video.videoHeight || 480;
       canvas.width  = vw;
       canvas.height = vh;
       canvas.getContext('2d')?.drawImage(video, 0, 0);
 
-      // Extract top ~18% of frame (where the card name is)
-      const nameH = Math.round(vh * 0.18);
-      const roi = document.createElement('canvas');
-      roi.width  = vw;
-      roi.height = nameH;
-      roi.getContext('2d')?.drawImage(canvas, 0, 0, vw, nameH, 0, 0, vw, nameH);
+      // Match the ScanTarget visual overlay (width=64%, centered, top at 38%-halfH)
+      const boxW = Math.round(vw * 0.64);
+      const boxH = Math.round(boxW / 0.71);
+      const boxX = Math.round((vw - boxW) / 2);
+      const boxY = Math.max(0, Math.round(vh * 0.38 - boxH / 2));
 
-      // OCR
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('eng');
-      const { data: { text } } = await worker.recognize(roi);
-      await worker.terminate();
+      function cropRegion(rx: number, ry: number, rw: number, rh: number): HTMLCanvasElement {
+        const c = document.createElement('canvas');
+        c.width  = Math.max(1, Math.round(rw));
+        c.height = Math.max(1, Math.round(rh));
+        c.getContext('2d')?.drawImage(canvas!, rx, Math.max(0, ry), rw, rh, 0, 0, rw, rh);
+        return c;
+      }
 
-      // Extract name candidate
-      const name = extractNameFromOcr(text);
-      if (!name) { setPhase('viewfinder'); return; }
+      // Region A: card name — top 22% of card box (where name text appears)
+      const nameRoi = preprocessForOcr(cropRegion(boxX, boxY, boxW, boxH * 0.22));
 
-      // Search API
-      const result = await searchCardsApi(name, 10);
-      if (result.cards.length === 0) { setPhase('viewfinder'); return; }
+      // Region B: card number — bottom 15%, right 55% (where "NNN/NNN" is printed)
+      const numW = boxW * 0.55;
+      const numH = boxH * 0.15;
+      const numRoi = preprocessForOcr(cropRegion(boxX + boxW - numW, boxY + boxH - numH, numW, numH));
 
-      // Show results
+      const worker = await getWorker();
+
+      // OCR name region (psm=7: single line of text)
+      await worker.setParameters({ tessedit_pageseg_mode: '7' });
+      const nameResult = await worker.recognize(nameRoi);
+      const nameText: string = nameResult.data.text;
+
+      // OCR number region (digits + slash)
+      await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789/\\|ABCDEFGHIJKLMNOPQRSTUVWXYZ- ' });
+      const numResult = await worker.recognize(numRoi);
+      const numText: string = numResult.data.text;
+      // Reset whitelist
+      await worker.setParameters({ tessedit_char_whitelist: '' });
+
+      let results: Card[] = [];
+      let searchTerm = '';
+
+      // Strategy 1: card number (most reliable — fixed format on every card)
+      const cardNum = parseCardNumber(numText);
+      if (cardNum) {
+        const r = await searchCardsApi(cardNum, 12);
+        if (r.cards.length > 0) { results = r.cards; searchTerm = cardNum; }
+      }
+
+      // Strategy 2: card name OCR (fallback)
+      if (results.length === 0) {
+        const name = extractNameFromOcr(nameText);
+        if (name && name.length >= 3) {
+          const r = await searchCardsApi(name, 12);
+          if (r.cards.length > 0) { results = r.cards; searchTerm = name; }
+        }
+      }
+
+      isBusyRef.current = false;
+
+      if (results.length === 0) { setPhase('viewfinder'); return; }
+
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-      setDetectedName(name);
-      setSearchResults(result.cards);
+      setDetectedName(searchTerm);
+      setSearchResults(results);
       setPhase('review');
     } catch {
+      isBusyRef.current = false;
       setPhase('viewfinder');
     }
   }
@@ -242,7 +329,7 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
             {t('pwa.cameraPermBody')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--accent-solid)', marginTop: 10, fontWeight: 600 }}>
-            Wird automatisch erkannt â€” kein Knopf nötig
+            Wird automatisch erkannt – kein Knopf nötig
           </div>
           {error && (
             <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.12)', color: 'var(--down)', fontSize: 12 }}>
@@ -377,7 +464,7 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
             background: isScanning ? 'var(--accent-solid)' : '#22c55e',
             boxShadow: isScanning ? '0 0 8px var(--accent-solid)' : '0 0 6px #22c55e',
           }} className={isScanning ? 'pulse-dot' : ''}/>
-          {isScanning ? 'Erkenne Karte...' : 'Karte im Rahmen halten'}
+          {isScanning ? 'OCR läuft – bitte warten…' : 'Karte in Rahmen halten · auto oder "Jetzt scannen"'}
         </div>
       </div>
 
@@ -393,18 +480,31 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
 
       {/* Manual search button */}
       <div style={{
-        position: 'absolute', bottom: 80, left: 0, right: 0, zIndex: 5,
-        display: 'flex', justifyContent: 'center',
+        position: 'absolute', bottom: 90, left: 0, right: 0, zIndex: 5,
+        display: 'flex', justifyContent: 'center', gap: 10,
       }}>
+        <button
+          onClick={() => { if (!isBusyRef.current) void runScan(); }}
+          style={{
+            padding: '12px 28px', borderRadius: 999,
+            background: 'var(--accent-grad)',
+            border: 'none',
+            color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 7,
+            boxShadow: '0 6px 20px var(--accent-shadow)',
+          }}>
+          <Icons.Scan size={15}/>
+          Jetzt scannen
+        </button>
         <button onClick={onManual} style={{
-          padding: '12px 28px', borderRadius: 999,
+          padding: '12px 20px', borderRadius: 999,
           background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
           border: '1px solid rgba(255,255,255,0.18)',
           color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 7,
         }}>
           <Icons.Search size={15}/>
-          Manuell suchen
+          Manuell
         </button>
       </div>
 

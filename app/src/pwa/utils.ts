@@ -34,16 +34,32 @@ export interface PwaRow {
   history: number[];
 }
 
-/** Generates a smooth 31-point price history from avg30/avg7/current */
+/** Generates a smooth 90-point price history (≈3 months) from avg30/avg7/current */
 function generateHistory(current: number, avg7: number | null, avg30: number | null): number[] {
-  const p30 = avg30 ?? current;
-  const p7  = avg7  ?? current;
-  const p0  = current;
-  return Array.from({ length: 31 }, (_, i) => {
-    const t = i / 30;
-    const t1 = 7 / 30;
-    if (t <= t1) return p30 + (p7 - p30) * (t / t1);
-    return p7 + (p0 - p7) * ((t - t1) / (1 - t1));
+  const c   = current > 0 ? current : 0.01;
+  const a7  = (avg7  ?? c) > 0 ? (avg7  ?? c) : c;
+  const a30 = (avg30 ?? c) > 0 ? (avg30 ?? c) : c;
+  // Synthetic 90-day history anchored at three known points:
+  //   index  0 = 90 days ago  (~6% above avg30, extrapolated)
+  //   index 60 = 30 days ago  (= avg30)
+  //   index 83 = 7 days ago   (= avg7)
+  //   index 89 = today        (= current)
+  const N = 90;
+  return Array.from({ length: N }, (_, i) => {
+    let base: number;
+    if (i <= 60) {
+      const t = i / 60;
+      base = a30 * (1 + 0.06 * (1 - t)); // 6% higher 90 days ago → avg30
+    } else if (i <= 83) {
+      const t = (i - 60) / 23;
+      base = a30 + (a7 - a30) * t;
+    } else {
+      const t = (i - 83) / 6;
+      base = a7 + (c - a7) * t;
+    }
+    // Deterministic noise for a realistic zigzag (no random so re-render is stable)
+    const noise = base * 0.018 * (Math.sin(i * 2.3 + 1.2) * 0.7 + Math.cos(i * 0.8 + 0.4) * 0.3);
+    return Math.max(0, base + noise);
   });
 }
 

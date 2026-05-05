@@ -96,7 +96,11 @@ export function Sparkline({ data, w = 80, h = 28, color, fillFrom, fillTo, dot =
   const c = color || 'var(--accent-solid)';
   const uid = `sg-${Math.round((data[0] ?? 0) * 100)}-${data.length}`;
   return (
-    <svg width={w} height={h} style={{ overflow: 'visible' }}>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      style={{ width: '100%', height: h, overflow: 'visible', display: 'block' }}
+    >
       <defs>
         <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={fillFrom || c} stopOpacity="0.32"/>
