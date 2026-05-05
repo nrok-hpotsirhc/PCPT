@@ -259,8 +259,31 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
     } catch { return false; }
   }
 
-  // ── Image preprocessing (scale 4x + grayscale + contrast) ──────────────────
-  function preprocessForOcr(src: HTMLCanvasElement, scale = 4): HTMLCanvasElement {
+  // ── Rotate a canvas 90 / 180 / 270 degrees ────────────────────────────────
+  function rotateCanvas(src: HTMLCanvasElement, deg: 90 | 180 | 270): HTMLCanvasElement {
+    const isOdd = deg === 90 || deg === 270;
+    const out = document.createElement('canvas');
+    out.width  = isOdd ? src.height : src.width;
+    out.height = isOdd ? src.width  : src.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return src;
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.rotate((deg * Math.PI) / 180);
+    ctx.drawImage(src, -src.width / 2, -src.height / 2);
+    return out;
+  }
+
+  // ── Crop a sub-region from an existing canvas ─────────────────────────────
+  function cropFrom(src: HTMLCanvasElement, rx: number, ry: number, rw: number, rh: number): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width  = Math.max(1, Math.round(rw));
+    c.height = Math.max(1, Math.round(rh));
+    c.getContext('2d')?.drawImage(src, rx, ry, rw, rh, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  // ── Image preprocessing (scale 3x + grayscale + contrast) ──────────────────
+  function preprocessForOcr(src: HTMLCanvasElement, scale = 3): HTMLCanvasElement {
     const out = document.createElement('canvas');
     out.width  = Math.max(1, src.width  * scale);
     out.height = Math.max(1, src.height * scale);
@@ -333,71 +356,72 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
       // Convert guide screen rect → video pixel crop box (objectFit:cover transform)
       const { boxX, boxY, boxW, boxH } = guideToVideoBox(cardGuideRef.current, vw, vh);
 
-      function cropRegion(rx: number, ry: number, rw: number, rh: number): HTMLCanvasElement {
-        const c = document.createElement('canvas');
-        c.width  = Math.max(1, Math.round(rw));
-        c.height = Math.max(1, Math.round(rh));
-        c.getContext('2d')?.drawImage(canvas!, rx, Math.max(0, ry), rw, rh, 0, 0, rw, rh);
-        return c;
-      }
+      // Crop just the card area from the full video frame
+      const cardCanvas = cropFrom(canvas, boxX, boxY, boxW, boxH);
+
+      // Orientations to try: portrait (0°), landscape-CW (90°), landscape-CCW (270°)
+      // Each rotation transforms the card so the "bottom" of the card is always at the canvas bottom.
+      const orientations: HTMLCanvasElement[] = [
+        cardCanvas,
+        rotateCanvas(cardCanvas, 90),
+        rotateCanvas(cardCanvas, 270),
+        rotateCanvas(cardCanvas, 180),
+      ];
 
       const worker = await getWorker();
       let results: Card[] = [];
       let searchTerm = '';
 
-      // ── Strategy 1: card number OCR (bottom-right corner, most reliable) ──
+      // ── Strategy 1: number in full-width bottom strip, all orientations ─────────
+      // The card number (NNN/NNN) appears at the bottom of the card on EVERY Pokémon card.
+      // We scan the full width so left-side OR right-side positions are both covered.
       setRoiStatuses(s => ({ ...s, number: 'active' }));
       setAnalysisMsg('Suche Kartennummer…');
-      const numW = boxW * 0.55;
-      const numH = boxH * 0.15;
-      const numRoi = preprocessForOcr(
-        cropRegion(boxX + boxW - numW, boxY + boxH - numH, numW, numH)
-      );
-      await worker.setParameters({
-        tessedit_pageseg_mode: '7',
-        tessedit_char_whitelist: '0123456789/\\|ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
-      });
-      const numResult = await worker.recognize(numRoi);
-      await worker.setParameters({ tessedit_char_whitelist: '' });
-      const numText: string = numResult.data.text;
-      const cardNum = parseCardNumber(numText);
 
-      if (cardNum) {
-        const r = await searchCardsApi(cardNum, 12);
-        if (r.cards.length > 0) {
-          results = r.cards;
-          searchTerm = cardNum;
-          setRoiStatuses(s => ({ ...s, number: 'ok' }));
-        } else {
-          setRoiStatuses(s => ({ ...s, number: 'fail' }));
+      for (const oriented of orientations) {
+        if (results.length > 0) break;
+        const stripH = Math.round(oriented.height * 0.30); // bottom 30%
+        const strip = preprocessForOcr(cropFrom(oriented, 0, oriented.height - stripH, oriented.width, stripH), 3);
+        await worker.setParameters({
+          tessedit_pageseg_mode: '6', // sparse text block — handles multi-item strip
+          tessedit_char_whitelist: '0123456789/\\|ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
+        });
+        const r = await worker.recognize(strip);
+        await worker.setParameters({ tessedit_char_whitelist: '' });
+        const cardNum = parseCardNumber(r.data.text);
+        if (cardNum) {
+          const apiR = await searchCardsApi(cardNum, 12);
+          if (apiR.cards.length > 0) {
+            results = apiR.cards;
+            searchTerm = cardNum;
+            setRoiStatuses(s => ({ ...s, number: 'ok' }));
+          }
         }
-      } else {
-        setRoiStatuses(s => ({ ...s, number: 'fail' }));
       }
+      if (results.length === 0) setRoiStatuses(s => ({ ...s, number: 'fail' }));
 
-      // ── Strategy 2: card name OCR (top of card, fallback) ──────────────────
+      // ── Strategy 2: name in full-width top strip, all orientations ──────────────
       if (results.length === 0) {
         setRoiStatuses(s => ({ ...s, name: 'active' }));
         setAnalysisMsg('Suche Kartenname…');
-        const nameRoi = preprocessForOcr(
-          cropRegion(boxX, boxY, boxW, boxH * 0.22)
-        );
-        await worker.setParameters({ tessedit_pageseg_mode: '7' });
-        const nameResult = await worker.recognize(nameRoi);
-        const nameText: string = nameResult.data.text;
-        const name = extractNameFromOcr(nameText);
-        if (name && name.length >= 3) {
-          const r = await searchCardsApi(name, 12);
-          if (r.cards.length > 0) {
-            results = r.cards;
-            searchTerm = name;
-            setRoiStatuses(s => ({ ...s, name: 'ok' }));
-          } else {
-            setRoiStatuses(s => ({ ...s, name: 'fail' }));
+
+        for (const oriented of orientations) {
+          if (results.length > 0) break;
+          const nameH = Math.round(oriented.height * 0.22); // top 22%
+          const nameStrip = preprocessForOcr(cropFrom(oriented, 0, 0, oriented.width, nameH), 3);
+          await worker.setParameters({ tessedit_pageseg_mode: '7' });
+          const r = await worker.recognize(nameStrip);
+          const name = extractNameFromOcr(r.data.text);
+          if (name && name.length >= 3) {
+            const apiR = await searchCardsApi(name, 12);
+            if (apiR.cards.length > 0) {
+              results = apiR.cards;
+              searchTerm = name;
+              setRoiStatuses(s => ({ ...s, name: 'ok' }));
+            }
           }
-        } else {
-          setRoiStatuses(s => ({ ...s, name: 'fail' }));
         }
+        if (results.length === 0) setRoiStatuses(s => ({ ...s, name: 'fail' }));
       }
 
       isBusyRef.current = false;
@@ -495,26 +519,26 @@ export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
 
   if (phase === 'analyzing' && capturedFrame) {
     const gr = cardGuideRect;
-    // ROI boxes positioned in screen-pixel coords from the stored guideRect
+    // ROI boxes: full-width strips matching the actual scan regions
     const roiDefs: { id: string; label: string; style: React.CSSProperties }[] = gr ? [
       {
         id: 'number',
-        label: 'Kartennummer',
+        label: 'Kartennummer (volle Breite)',
         style: {
-          left: gr.left + gr.width * 0.45,
-          top:  gr.top  + gr.height * 0.84,
-          width: gr.width * 0.55,
-          height: gr.height * 0.16,
+          left:   gr.left,
+          top:    gr.top  + gr.height * 0.70,  // bottom 30% of card
+          width:  gr.width,
+          height: gr.height * 0.30,
         },
       },
       {
         id: 'name',
         label: 'Kartenname',
         style: {
-          left: gr.left,
-          top:  gr.top,
-          width: gr.width,
-          height: gr.height * 0.23,
+          left:   gr.left,
+          top:    gr.top,
+          width:  gr.width,
+          height: gr.height * 0.22,             // top 22% of card
         },
       },
     ] : [];
