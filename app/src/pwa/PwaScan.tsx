@@ -1,9 +1,10 @@
-﻿// PWA Scan screen â€” live camera feed with auto-detect (no shutter button needed)
+﻿// PWA Scan screen - live camera feed with auto-detect (no shutter button needed)
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Icons } from './icons';
-import { PwaCard, CardThumb, GradientButton, GhostButton } from './ui';
+import { CardThumb, GhostButton, GradientButton } from './ui';
 import { fmtMoney, getCardPrice } from './utils';
+import { searchCardsApi } from '@/lib/pokemon-api';
 import type { TranslationFn } from './types';
 import type { Card } from '@/lib/types';
 
@@ -17,11 +18,12 @@ interface ScanProps {
   onManual: () => void;
 }
 
-export function PwaScan({ cards, currency, t, onCardDetected, onManual }: ScanProps) {
-  const [phase, setPhase]         = useState<Phase>('permission');
-  const [match, setMatch]         = useState<{ card: Card; confidence: number } | null>(null);
-  const [error, setError]         = useState<string | null>(null);
-  const [scanCount, setScanCount] = useState(0);
+export function PwaScan({ currency, t, onCardDetected, onManual }: ScanProps) {
+  const [phase, setPhase]             = useState<Phase>('permission');
+  const [searchResults, setSearchResults] = useState<Card[]>([]);
+  const [detectedName, setDetectedName] = useState('');
+  const [error, setError]             = useState<string | null>(null);
+  const [scanCount, setScanCount]     = useState(0);
 
   const videoRef       = useRef<HTMLVideoElement>(null);
   const streamRef      = useRef<MediaStream | null>(null);
@@ -158,40 +160,66 @@ export function PwaScan({ cards, currency, t, onCardDetected, onManual }: ScanPr
       const video  = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas) throw new Error('no refs');
-      canvas.width  = video.videoWidth  || 640;
-      canvas.height = video.videoHeight || 480;
+
+      // Capture full frame
+      const vw = video.videoWidth  || 640;
+      const vh = video.videoHeight || 480;
+      canvas.width  = vw;
+      canvas.height = vh;
       canvas.getContext('2d')?.drawImage(video, 0, 0);
+
+      // Extract top ~18% of frame (where the card name is)
+      const nameH = Math.round(vh * 0.18);
+      const roi = document.createElement('canvas');
+      roi.width  = vw;
+      roi.height = nameH;
+      roi.getContext('2d')?.drawImage(canvas, 0, 0, vw, nameH, 0, 0, vw, nameH);
+
+      // OCR
       const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng');
-      const { data: { text } } = await worker.recognize(canvas);
+      const { data: { text } } = await worker.recognize(roi);
       await worker.terminate();
-      const found = findBestMatch(text, cards);
-      if (found) {
-        if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-        setMatch({ card: found, confidence: 0.85 });
-        setPhase('review');
-        return;
-      }
-    } catch { /* silent */ }
-    setPhase('viewfinder');
-  }
 
-  function findBestMatch(ocrText: string, cardList: Card[]): Card | null {
-    const lines = ocrText.toLowerCase().split('\n').map(l => l.trim()).filter(Boolean);
-    let bestCard: Card | null = null;
-    let bestScore = 0;
-    for (const card of cardList) {
-      const name  = card.name.toLowerCase();
-      const score = lines.reduce((s, line) => s + (line.includes(name) ? 1 : 0), 0);
-      if (score > bestScore) { bestScore = score; bestCard = card; }
+      // Extract name candidate
+      const name = extractNameFromOcr(text);
+      if (!name) { setPhase('viewfinder'); return; }
+
+      // Search API
+      const result = await searchCardsApi(name, 10);
+      if (result.cards.length === 0) { setPhase('viewfinder'); return; }
+
+      // Show results
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      setDetectedName(name);
+      setSearchResults(result.cards);
+      setPhase('review');
+    } catch {
+      setPhase('viewfinder');
     }
-    return bestScore > 0 ? bestCard : null;
   }
 
   function retry() {
-    setMatch(null);
+    setSearchResults([]);
+    setDetectedName('');
     setPhase('viewfinder');
     startAutoScan();
+  }
+
+  /** Extract a plausible card name from raw OCR text */
+  function extractNameFromOcr(raw: string): string | null {
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length >= 2);
+    for (const line of lines) {
+      const cleaned = line
+        .replace(/[|_{}[\]<>~`@#$%^&*()+=\d]/g, ' ')
+        .replace(/\b(hp|kp|stage|basic|stufe|basis|evolution|energy)\b/gi, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      if (cleaned.length < 3) continue;
+      const words = cleaned.split(/\s+/).slice(0, 3).join(' ');
+      if (words.length >= 3) return words;
+    }
+    return null;
   }
 
   // â”€â”€ PERMISSION GATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -214,7 +242,7 @@ export function PwaScan({ cards, currency, t, onCardDetected, onManual }: ScanPr
             {t('pwa.cameraPermBody')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--accent-solid)', marginTop: 10, fontWeight: 600 }}>
-            Wird automatisch erkannt â€” kein Knopf nÃ¶tig
+            Wird automatisch erkannt â€” kein Knopf nötig
           </div>
           {error && (
             <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.12)', color: 'var(--down)', fontSize: 12 }}>
@@ -239,30 +267,79 @@ export function PwaScan({ cards, currency, t, onCardDetected, onManual }: ScanPr
 
   if (phase === 'review') {
     return (
-      <div style={{ height: '100%', background: 'var(--bg)', overflow: 'auto' }}>
-        <div style={{ padding: '60px 16px 24px' }}>
-          {match ? (
-            <ReviewMatch
-              match={match} currency={currency} t={t}
-              onAccept={() => { stopCamera(); onCardDetected(match.card); }}
-              onRetry={retry}
-            />
-          ) : (
-            <PwaCard padding={20} style={{ textAlign: 'center' }}>
-              <Icons.AlertTriangle size={32} style={{ color: 'var(--down)', marginBottom: 12 }}/>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', marginBottom: 8 }}>Keine Karte erkannt</div>
-              <div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 16 }}>Karte besser ausrichten und nochmal versuchen</div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <GhostButton onClick={retry} full><Icons.RotateCw size={15}/>{t('pwa.retry')}</GhostButton>
-                <GhostButton onClick={onManual} full><Icons.Search size={15}/>{t('pwa.cantScan')}</GhostButton>
+      <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid var(--card-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-solid)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Karten gefunden
               </div>
-            </PwaCard>
-          )}
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginTop: 1 }}>
+                "{detectedName}"
+              </div>
+            </div>
+            <GhostButton onClick={retry}>
+              <Icons.RotateCw size={14}/> Neu scannen
+            </GhostButton>
+          </div>
+        </div>
+
+        {/* Card list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 24px' }}>
+          {searchResults.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--fg-muted)' }}>
+              <Icons.AlertTriangle size={28} style={{ marginBottom: 10 }}/>
+              <div>Keine Karten gefunden</div>
+              <button onClick={retry} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 10, background: 'var(--accent-grad)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
+                Nochmal versuchen
+              </button>
+            </div>
+          ) : searchResults.map(card => {
+            const price = getCardPrice(card);
+            return (
+              <button
+                key={card.id}
+                onClick={() => { stopCamera(); onCardDetected(card); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                  background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                  borderRadius: 14, padding: '12px 14px', marginBottom: 10,
+                  cursor: 'pointer', textAlign: 'left',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                }}
+              >
+                <CardThumb img={card.images.small} name={card.name} w={48} radius={6} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>{card.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
+                    {card.set.name} · {card.number}
+                  </div>
+                  {price !== null && (
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-solid)', marginTop: 2 }}>
+                      {fmtMoney(price, currency)}
+                    </div>
+                  )}
+                </div>
+                <Icons.ChevronRight size={16} style={{ color: 'var(--fg-muted)', flexShrink: 0 }}/>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Manual fallback */}
+        <div style={{ padding: '0 16px 20px' }}>
+          <button onClick={onManual} style={{
+            width: '100%', padding: '12px 0', borderRadius: 12,
+            background: 'var(--pill-bg)', border: '1px solid var(--card-border)',
+            color: 'var(--fg-muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}>
+            Manuell suchen
+          </button>
         </div>
       </div>
     );
   }
-
   // â”€â”€ CAMERA VIEWFINDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const isScanning = phase === 'matching';
@@ -387,51 +464,4 @@ function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
   return <div style={styles[pos]}/>;
 }
 
-function ReviewMatch({ match, currency, t, onAccept, onRetry }: {
-  match: { card: Card; confidence: number };
-  currency: string;
-  t: TranslationFn;
-  onAccept: () => void;
-  onRetry: () => void;
-}) {
-  const conf = Math.round(match.confidence * 100);
-  const confColor = conf >= 80 ? 'var(--up)' : conf >= 60 ? '#FB923C' : 'var(--down)';
-  const price = getCardPrice(match.card);
-  return (
-    <PwaCard padding={16}>
-      <div style={{ display: 'flex', gap: 14 }}>
-        <CardThumb img={match.card.images.small} name={match.card.name} w={72} radius={7} glow/>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-solid)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-            {t('pwa.matchFound')}
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{match.card.name}</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {match.card.set.name} Â· {match.card.set.ptcgoCode ?? match.card.set.id} {match.card.number}
-          </div>
-          {price !== null && (
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg)', marginTop: 4 }}>
-              {fmtMoney(price, currency)}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: 'var(--fg-muted)', marginBottom: 6 }}>
-          <span>{t('pwa.confidence')}</span>
-          <span style={{ color: confColor, fontWeight: 700 }}>{conf}%</span>
-        </div>
-        <div style={{ height: 6, background: 'var(--pill-bg)', borderRadius: 999, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${conf}%`, background: confColor, borderRadius: 999 }}/>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-        <GhostButton onClick={onRetry} full><Icons.RotateCw size={15}/>{t('pwa.retry')}</GhostButton>
-        <GradientButton onClick={onAccept} full><Icons.Check size={16}/>{t('pwa.useMatch')}</GradientButton>
-      </div>
-    </PwaCard>
-  );
-}
 
