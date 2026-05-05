@@ -32,35 +32,56 @@ export function PwaApp() {
   const [detailRow, setDetailRow] = useState<PwaRow | null>(null);
   const [editCard, setEditCard]   = useState<UserCard | null>(null);
   const [prefilledCard, setPrefilledCard] = useState<Card | null>(null);
+  const [isDark, setIsDark]       = useState(true);
+  const [activeCurrency, setActiveCurrency] = useState<string>(() => localStorage.getItem('pwa-currency') ?? 'EUR');
+  const [profileName, setProfileName] = useState<string>(() => localStorage.getItem('pwa-profile-name') ?? '');
 
   const rows    = toPwaRows(rawRows);
-  const currency = rawRows[0]?.currency ?? 'EUR';
+  const currency = activeCurrency;
 
   // Apply PWA CSS variables on mount
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--bg',             '#0B0816');
-    root.style.setProperty('--fg',             '#F5F3FF');
-    root.style.setProperty('--fg-muted',       'rgba(232,228,255,0.55)');
-    root.style.setProperty('--card-bg',        '#15102A');
-    root.style.setProperty('--card-border',    'rgba(255,255,255,0.07)');
-    root.style.setProperty('--card-shadow',    '0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.3)');
-    root.style.setProperty('--input-bg',       '#1A142F');
-    root.style.setProperty('--pill-bg',        'rgba(255,255,255,0.06)');
-    root.style.setProperty('--pill-fg',        'rgba(232,228,255,0.7)');
-    root.style.setProperty('--ghost-bg',       'rgba(255,255,255,0.04)');
-    root.style.setProperty('--icon-btn-bg',    'rgba(255,255,255,0.05)');
-    root.style.setProperty('--topbar-scrolled','rgba(11,8,22,0.78)');
-    root.style.setProperty('--up',             '#34D399');
-    root.style.setProperty('--down',           '#F87171');
-    root.style.setProperty('--tabbar-bg',      'rgba(11,8,22,0.85)');
-    root.style.setProperty('--accent-from',    ACCENT.from);
-    root.style.setProperty('--accent-to',      ACCENT.to);
-    root.style.setProperty('--accent-solid',   ACCENT.solid);
-    root.style.setProperty('--accent-soft',    ACCENT.soft);
-    root.style.setProperty('--accent-grad',    `linear-gradient(135deg, ${ACCENT.from} 0%, ${ACCENT.to} 100%)`);
-    root.style.setProperty('--accent-shadow',  ACCENT.shadow);
-  }, []);
+    const applyDarkTheme = (dark: boolean) => {
+      if (dark) {
+        root.style.setProperty('--bg',           '#0B0816');
+        root.style.setProperty('--fg',           '#F5F3FF');
+        root.style.setProperty('--fg-muted',     'rgba(232,228,255,0.55)');
+        root.style.setProperty('--card-bg',      '#15102A');
+        root.style.setProperty('--card-border',  'rgba(255,255,255,0.07)');
+        root.style.setProperty('--input-bg',     '#1A142F');
+        root.style.setProperty('--pill-bg',      'rgba(255,255,255,0.06)');
+        root.style.setProperty('--pill-fg',      'rgba(232,228,255,0.7)');
+        root.style.setProperty('--ghost-bg',     'rgba(255,255,255,0.04)');
+        root.style.setProperty('--icon-btn-bg',  'rgba(255,255,255,0.05)');
+        root.style.setProperty('--topbar-scrolled','rgba(11,8,22,0.78)');
+        root.style.setProperty('--tabbar-bg',    'rgba(11,8,22,0.85)');
+      } else {
+        root.style.setProperty('--bg',           '#F0EEF8');
+        root.style.setProperty('--fg',           '#12102A');
+        root.style.setProperty('--fg-muted',     'rgba(12,10,30,0.5)');
+        root.style.setProperty('--card-bg',      '#FFFFFF');
+        root.style.setProperty('--card-border',  'rgba(0,0,0,0.08)');
+        root.style.setProperty('--input-bg',     '#FAFAFE');
+        root.style.setProperty('--pill-bg',      'rgba(0,0,0,0.06)');
+        root.style.setProperty('--pill-fg',      'rgba(12,10,30,0.65)');
+        root.style.setProperty('--ghost-bg',     'rgba(0,0,0,0.04)');
+        root.style.setProperty('--icon-btn-bg',  'rgba(0,0,0,0.05)');
+        root.style.setProperty('--topbar-scrolled','rgba(240,238,248,0.85)');
+        root.style.setProperty('--tabbar-bg',    'rgba(240,238,248,0.92)');
+      }
+    };
+    applyDarkTheme(isDark);
+    root.style.setProperty('--card-shadow',  '0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.3)');
+    root.style.setProperty('--up',           '#34D399');
+    root.style.setProperty('--down',         '#F87171');
+    root.style.setProperty('--accent-from',  ACCENT.from);
+    root.style.setProperty('--accent-to',    ACCENT.to);
+    root.style.setProperty('--accent-solid', ACCENT.solid);
+    root.style.setProperty('--accent-soft',  ACCENT.soft);
+    root.style.setProperty('--accent-grad',  `linear-gradient(135deg, ${ACCENT.from} 0%, ${ACCENT.to} 100%)`);
+    root.style.setProperty('--accent-shadow',ACCENT.shadow);
+  }, [isDark]);
 
   const handleSave = useCallback((card: UserCard) => {
     if (editCard?.id) {
@@ -90,11 +111,10 @@ export function PwaApp() {
     setTab('add');
   }, []);
 
-  function handleEdit() {
-    if (!detailRow) return;
-    const uc = userCards.find(c => c.id === detailRow.uc.id);
+  function handleEdit(row: PwaRow) {
+    const uc = userCards.find(c => c.id === row.uc.id);
     if (uc) setEditCard(uc);
-    const card = cards.find(c => c.id === detailRow.uc.cardId);
+    const card = cards.find(c => c.id === row.uc.cardId);
     if (card) setPrefilledCard(card);
     setDetailRow(null);
     setTab('add');
@@ -165,6 +185,21 @@ export function PwaApp() {
               currency={currency} locale={locale} t={tf}
               onImport={handleImport}
               onLocaleToggle={() => setLocale(locale === 'de' ? 'en' : 'de')}
+              isDark={isDark}
+              onThemeToggle={() => setIsDark(d => !d)}
+              activeCurrency={activeCurrency}
+              onCurrencyToggle={() => setActiveCurrency(c => {
+                const next = c === 'EUR' ? 'USD' : 'EUR';
+                localStorage.setItem('pwa-currency', next);
+                return next;
+              })}
+              profileName={profileName}
+              onNameChange={(n) => { setProfileName(n); localStorage.setItem('pwa-profile-name', n); }}
+              onReset={() => {
+                setUserCards([]);
+                setProfileName('');
+                localStorage.removeItem('pwa-profile-name');
+              }}
             />
           </div>
         )}
@@ -174,14 +209,18 @@ export function PwaApp() {
       <PwaTabBar tab={tab} onChange={setTab} t={tf}/>
 
       {/* Detail sheet */}
-      {detailRow && (
-        <PwaCardDetail
-          row={detailRow} currency={currency} t={tf}
-          onClose={() => setDetailRow(null)}
-          onEdit={handleEdit}
-          onDelete={() => handleDelete(detailRow.uc.id)}
-        />
-      )}
+      {detailRow && (() => {
+        const idx = rows.findIndex(r => r.uc.id === detailRow.uc.id);
+        if (idx < 0) return null;
+        return (
+          <PwaCardDetail
+            rows={rows} initialIndex={idx} currency={currency} t={tf}
+            onClose={() => setDetailRow(null)}
+            onEdit={handleEdit}
+            onDelete={(id) => handleDelete(id)}
+          />
+        );
+      })()}
     </div>
   );
 }

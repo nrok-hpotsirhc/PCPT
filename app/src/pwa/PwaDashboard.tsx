@@ -1,8 +1,8 @@
 // PWA Dashboard screen — matches the UIUX design exactly
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Icons } from './icons';
-import { Pill, PwaCard, Sparkline, CardThumb, TopBar, SectionLabel } from './ui';
+import { Pill, PwaCard, Sparkline, CardThumb, TopBar, SectionLabel, GhostButton } from './ui';
 import { fmtMoney, fmtMoneySigned, fmtPct, type PwaRow } from './utils';
 import type { TranslationFn } from './types';
 
@@ -15,6 +15,7 @@ interface DashboardProps {
 
 export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [showChart, setShowChart] = useState(false);
 
   const total        = rows.reduce((s, r) => s + r.value, 0);
   const totalCost    = rows.reduce((s, r) => s + r.cost, 0);
@@ -41,6 +42,7 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
   const topCards = [...rows].sort((a, b) => b.value - a.value).slice(0, 4);
 
   return (
+    <>
     <div
       onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 8)}
       style={{ height: '100%', overflow: 'auto' }}
@@ -53,6 +55,7 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
           total={total} change24h={change24h} pnl={allTimePnl}
           pct={allTimePct} cardCount={cardCount}
           totalHistory={totalHistory} currency={currency} t={t}
+          onClick={() => setShowChart(true)}
         />
 
         {/* Card of the day */}
@@ -98,24 +101,37 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
         </PwaCard>
       </div>
     </div>
+    {showChart && (
+      <TotalChartModal
+        totalHistory={totalHistory}
+        total={total}
+        pnl={allTimePnl}
+        pct={allTimePct}
+        currency={currency}
+        t={t}
+        onClose={() => setShowChart(false)}
+      />
+    )}
+    </>
   );
 }
 
 // ── Hero Total ─────────────────────────────────────────────────────────────────
 
 function HeroTotal({
-  total, change24h, pnl, pct, cardCount, totalHistory, currency, t,
+  total, change24h, pnl, pct, cardCount, totalHistory, currency, t, onClick,
 }: {
   total: number; change24h: number; pnl: number; pct: number;
-  cardCount: number; totalHistory: number[]; currency: string; t: TranslationFn;
+  cardCount: number; totalHistory: number[]; currency: string; t: TranslationFn; onClick: () => void;
 }) {
   const up = change24h >= 0;
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       borderRadius: 22, padding: 20, marginBottom: 16,
       background: 'var(--accent-grad)',
       color: 'white', position: 'relative', overflow: 'hidden',
       boxShadow: '0 12px 32px var(--accent-shadow)',
+      cursor: 'pointer',
     }}>
       {/* Decorative blob */}
       <div style={{
@@ -323,6 +339,137 @@ function ActivityRow({ icon, tone, text, time }: { icon: React.ReactNode; tone: 
       }}>{icon}</div>
       <div style={{ flex: 1, fontSize: 13, color: 'var(--fg)' }}>{text}</div>
       <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{time}</div>
+    </div>
+  );
+}
+
+// ── Total Chart Modal ──────────────────────────────────────────────────────────
+
+type ChartRange = '1W' | '1M' | '3M' | 'MAX';
+const CHART_RANGES: ChartRange[] = ['1W', '1M', '3M', 'MAX'];
+
+function TotalChartModal({
+  totalHistory, total, pnl, pct, currency, t, onClose,
+}: {
+  totalHistory: number[]; total: number; pnl: number; pct: number;
+  currency: string; t: TranslationFn; onClose: () => void;
+}) {
+  const [chartRange, setChartRange] = useState<ChartRange>('1M');
+  const [hoverIdx, setHoverIdx]     = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const getSlice = useCallback((r: ChartRange): number[] => {
+    switch (r) {
+      case '1W':  return totalHistory.slice(-7);
+      case '1M':  return totalHistory.slice(-31);
+      default:    return totalHistory;
+    }
+  }, [totalHistory]);
+
+  const raw  = getSlice(chartRange);
+  const data = raw.length > 0 ? raw : [total];
+  if (data.length < 2) data.push(total);
+
+  const W = 340, H = 180;
+  const minV = Math.min(...data);
+  const maxV = Math.max(...data);
+  const span = maxV - minV || 1;
+  const pts: [number, number][] = data.map((v, i) => [
+    (i / (data.length - 1)) * W,
+    H - ((v - minV) / span) * (H - 8) - 4,
+  ]);
+  const pathD = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L${W} ${H} L0 ${H} Z`;
+
+  const hoverVal = hoverIdx !== null ? (data[hoverIdx] ?? null) : null;
+  const hoverPt  = hoverIdx !== null ? (pts[hoverIdx] ?? null)  : null;
+  const displayVal = hoverVal ?? total;
+  const up = pnl >= 0;
+
+  function getIdxFromX(clientX: number): number {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(frac * (data.length - 1));
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'flex-end',
+        animation: 'fadeIn 0.18s',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', background: 'var(--bg)',
+          borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          paddingBottom: 'max(env(safe-area-inset-bottom),16px)',
+          animation: 'slideUp 0.25s cubic-bezier(0.2,0.9,0.3,1)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 999, background: 'var(--card-border)' }}/>
+        </div>
+
+        <div style={{ padding: '0 20px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 34, fontWeight: 800, color: 'var(--fg)', letterSpacing: -0.8 }}>
+              {fmtMoney(displayVal, currency)}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: up ? 'var(--up)' : 'var(--down)', marginTop: 2 }}>
+              {fmtMoneySigned(pnl, currency)} ({fmtPct(pct)}) {t('pwa.allTime')}
+            </div>
+          </div>
+
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            style={{ width: '100%', height: 180, overflow: 'visible', display: 'block', touchAction: 'none', cursor: 'crosshair' }}
+            onMouseMove={(e) => setHoverIdx(getIdxFromX(e.clientX))}
+            onMouseLeave={() => setHoverIdx(null)}
+            onTouchMove={(e) => { e.preventDefault(); const t0 = e.touches[0]; if (t0) setHoverIdx(getIdxFromX(t0.clientX)); }}
+            onTouchEnd={() => setHoverIdx(null)}
+          >
+            <defs>
+              <linearGradient id="tcg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="var(--accent-solid)" stopOpacity="0.35"/>
+                <stop offset="1" stopColor="var(--accent-solid)" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d={areaD} fill="url(#tcg)"/>
+            <path d={pathD} fill="none" stroke="var(--accent-solid)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            {hoverPt && (
+              <>
+                <line x1={hoverPt[0]} y1={0} x2={hoverPt[0]} y2={H} stroke="var(--fg-muted)" strokeWidth="1" strokeDasharray="4 3" opacity="0.5"/>
+                <circle cx={hoverPt[0]} cy={hoverPt[1]} r="5" fill="var(--accent-solid)" stroke="var(--bg)" strokeWidth="2.5"/>
+              </>
+            )}
+          </svg>
+
+          <div style={{ display: 'flex', gap: 6, marginTop: 14, justifyContent: 'center' }}>
+            {CHART_RANGES.map(r => (
+              <button key={r} onClick={() => { setChartRange(r); setHoverIdx(null); }} style={{
+                padding: '7px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                background: chartRange === r ? 'var(--accent-grad)' : 'var(--pill-bg)',
+                color: chartRange === r ? 'white' : 'var(--fg-muted)',
+                border: 'none', cursor: 'pointer',
+                boxShadow: chartRange === r ? '0 4px 12px var(--accent-shadow)' : 'none',
+              }}>{r}</button>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <GhostButton full onClick={onClose}>
+              <Icons.Close size={15}/> Schließen / Close
+            </GhostButton>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

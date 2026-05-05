@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Icons } from './icons';
 import {
-  PwaCard, CardThumb, TopBar, EmptyState, GradientButton, BottomSheet, inputStyle,
+  PwaCard, CardThumb, TopBar, EmptyState, BottomSheet, inputStyle,
 } from './ui';
 import { fmtMoney, fmtMoneySigned, type PwaRow } from './utils';
 import type { TranslationFn } from './types';
@@ -22,7 +22,6 @@ export function PwaPortfolio({ rows, currency, t, onRowClick }: PortfolioProps) 
   const [query, setQuery]           = useState('');
   const [sortBy, setSortBy]         = useState<SortKey>('value');
   const [sortDir, setSortDir]       = useState<'asc' | 'desc'>('desc');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen]     = useState(false);
 
   const filtered = useMemo(() => {
@@ -74,24 +73,48 @@ export function PwaPortfolio({ rows, currency, t, onRowClick }: PortfolioProps) 
           subtitle={`${filtered.length} ${t('pwa.cards')} · ${fmtMoney(totalValue, currency)}`}
         />
 
+        {/* Sticky search + sort bar */}
+        <div style={{
+          position: 'sticky', top: 48, zIndex: 15,
+          display: 'flex', gap: 8, padding: '8px 16px',
+          background: 'var(--bg)',
+        }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Icons.Search size={14} style={{
+              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--fg-muted)', pointerEvents: 'none',
+            }}/>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('pwa.searchPlaceholder')}
+              style={{ ...inputStyle, paddingLeft: 32, paddingRight: query ? 32 : 12, fontSize: 13, padding: '10px 12px 10px 32px' }}
+            />
+            {query && (
+              <button onClick={() => setQuery('')} style={{
+                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                width: 20, height: 20, borderRadius: 999, border: 'none',
+                background: 'var(--pill-bg)', color: 'var(--fg-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
+              }}><Icons.Close size={11}/></button>
+            )}
+          </div>
+          <button onClick={() => setSortOpen(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '10px 12px',
+            borderRadius: 12, border: '1px solid var(--card-border)',
+            background: (sortBy !== 'value' || sortDir !== 'desc') ? 'var(--accent-soft)' : 'var(--card-bg)',
+            color: (sortBy !== 'value' || sortDir !== 'desc') ? 'var(--accent-solid)' : 'var(--fg-muted)',
+            cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+          }}>
+            <Icons.Sort size={14}/>
+            {sortOptions.find(s => s.k === sortBy)?.l}
+            {sortDir === 'asc' ? <Icons.ChevronUp size={11}/> : <Icons.ChevronDown size={11}/>}
+          </button>
+        </div>
+
           <div style={{ padding: '4px 16px 24px' }}>
-          {/* Active filter chips */}
-          {(query || sortBy !== 'value' || sortDir !== 'desc') && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-              {query && (
-                <button onClick={() => setQuery('')} style={chipStyle(true)}>
-                  <Icons.Search size={11}/>
-                  &ldquo;{query}&rdquo;
-                  <Icons.Close size={11}/>
-                </button>
-              )}
-              <div style={chipStyle(false)}>
-                <Icons.Sort size={11}/>
-                {sortOptions.find(s => s.k === sortBy)?.l}
-                {sortDir === 'asc' ? <Icons.ChevronUp size={11}/> : <Icons.ChevronDown size={11}/>}
-              </div>
-            </div>
-          )}
+          {/* Active filter chips — only query chip remains */}
+          {false && null /* filter chips moved to sticky bar */}
 
           {/* List */}
           {filtered.length === 0 ? (
@@ -113,45 +136,7 @@ export function PwaPortfolio({ rows, currency, t, onRowClick }: PortfolioProps) 
         </div>
       </div>
 
-      {/* Floating FABs */}
-      <Fab side="left" onClick={() => setFilterOpen(true)} active={!!query} label="Filter">
-        <Icons.Search size={20}/>
-      </Fab>
-      <Fab side="right" onClick={() => setSortOpen(true)} active={sortBy !== 'value' || sortDir !== 'desc'} label="Sort">
-        <Icons.Sort size={20}/>
-      </Fab>
-
-      {/* Filter sheet */}
-      {filterOpen && (
-        <BottomSheet onClose={() => setFilterOpen(false)} title={t('pwa.searchPlaceholder')}>
-          <div style={{ position: 'relative' }}>
-            <Icons.Search size={16} style={{
-              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-              color: 'var(--fg-muted)', pointerEvents: 'none',
-            }}/>
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('pwa.searchPlaceholder')}
-              style={{ ...inputStyle, paddingLeft: 36, paddingRight: 36 }}
-            />
-            {query && (
-              <button onClick={() => setQuery('')} aria-label="Clear" style={{
-                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                width: 22, height: 22, borderRadius: 999, border: 'none',
-                background: 'var(--pill-bg)', color: 'var(--fg-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              }}><Icons.Close size={12}/></button>
-            )}
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <GradientButton full onClick={() => setFilterOpen(false)}>
-              <Icons.Check size={16}/>{filtered.length} {t('pwa.cards')}
-            </GradientButton>
-          </div>
-        </BottomSheet>
-      )}
+      {/* No floating FABs — search/sort moved to sticky bar above list */}
 
       {/* Sort sheet */}
       {sortOpen && (
@@ -241,32 +226,4 @@ function PortfolioRow({ row, currency, onClick, last }: {
   );
 }
 
-// ── FAB ───────────────────────────────────────────────────────────────────────
-
-function chipStyle(active: boolean): React.CSSProperties {
-  return {
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    padding: '4px 10px', borderRadius: 999,
-    background: active ? 'var(--accent-soft)' : 'var(--pill-bg)',
-    color: active ? 'var(--accent-solid)' : 'var(--fg-muted)',
-    border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-  };
-}
-
-function Fab({ side, onClick, children, active, label }: {
-  side: 'left' | 'right'; onClick: () => void; children: React.ReactNode; active: boolean; label: string;
-}) {
-  const pos = side === 'left' ? { left: 16 } : { right: 16 };
-  return (
-    <button onClick={onClick} aria-label={label} style={{
-      position: 'absolute', bottom: 92, ...pos,
-      width: 48, height: 48, borderRadius: 999,
-      background: active ? 'var(--accent-grad)' : 'var(--card-bg)',
-      color: active ? 'white' : 'var(--fg)',
-      border: '1px solid var(--card-border)',
-      boxShadow: active ? '0 8px 22px var(--accent-shadow)' : '0 6px 18px rgba(0,0,0,0.2)',
-      cursor: 'pointer', zIndex: 65,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>{children}</button>
-  );
-}
+// ── helpers ───────────────────────────────────────────────────────────────────

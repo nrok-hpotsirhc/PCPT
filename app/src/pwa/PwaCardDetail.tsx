@@ -1,27 +1,36 @@
 // PWA Card Detail bottom sheet — price chart, stats, edit/delete
+// Swipe down to close · swipe left/right to navigate between cards
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Icons } from './icons';
-import { Pill, Sparkline, CardThumb, IconBtn, GhostButton } from './ui';
+import { Pill, Sparkline, CardThumb, GhostButton } from './ui';
 import { fmtMoney, fmtMoneySigned, fmtPct, typeToPillTone, type PwaRow } from './utils';
 import type { TranslationFn } from './types';
 
 interface CardDetailProps {
-  row: PwaRow;
+  rows: PwaRow[];        // all portfolio rows for prev/next nav
+  initialIndex: number;  // which row to show first
   currency: string;
   t: TranslationFn;
   onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (row: PwaRow) => void;
+  onDelete: (id: string) => void;
 }
 
 type Range = '7d' | '30d' | '90d';
-const RANGES: Record<Range, number> = { '7d': 7, '30d': 30, '90d': 30 }; // 90d uses same 30 pts but labeled
+const RANGES: Range[] = ['7d', '30d', '90d'];
+const RANGE_DAYS: Record<Range, number> = { '7d': 7, '30d': 30, '90d': 30 };
 
-export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: CardDetailProps) {
+export function PwaCardDetail({ rows, initialIndex, currency, t, onClose, onEdit, onDelete }: CardDetailProps) {
+  const [idx, setIdx]     = useState(initialIndex);
   const [range, setRange] = useState<Range>('30d');
+  const touchStart  = useRef<{ x: number; y: number } | null>(null);
+  const [dragY, setDragY] = useState(0);
 
-  const days   = RANGES[range];
+  const row = rows[idx];
+  if (!row) return null;
+
+  const days   = RANGE_DAYS[range];
   const values = row.history.slice(-days - 1);
   const start  = values[0] ?? 0;
   const end    = values[values.length - 1] ?? 0;
@@ -30,38 +39,91 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
   const up     = delta >= 0;
   const pillTone = typeToPillTone(row.card.type);
 
+  function goPrev() { if (idx > 0) setIdx(idx - 1); }
+  function goNext() { if (idx < rows.length - 1) setIdx(idx + 1); }
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t0 = e.touches[0];
+    if (!t0) return;
+    touchStart.current = { x: t0.clientX, y: t0.clientY };
+    setDragY(0);
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const t0 = e.touches[0];
+    if (!t0) return;
+    const dy = t0.clientY - touchStart.current.y;
+    if (dy > 0) setDragY(dy);
+  }, []);
+
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const t0 = e.changedTouches[0];
+    if (!t0) return;
+    const dx = t0.clientX - touchStart.current.x;
+    const dy = t0.clientY - touchStart.current.y;
+    touchStart.current = null;
+    setDragY(0);
+    if (Math.abs(dy) > 80 && Math.abs(dy) > Math.abs(dx)) {
+      onClose();
+    } else if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) goNext(); else goPrev();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, rows.length, onClose]);
+
   return (
     <div
       onClick={onClose}
       style={{
-        position: 'absolute', inset: 0, zIndex: 100,
-        background: 'rgba(0,0,0,0.45)',
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: `rgba(0,0,0,${0.45 + Math.min(dragY / 1000, 0.1)})`,
         display: 'flex', alignItems: 'flex-end',
         animation: 'fadeIn 0.2s',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{
           width: '100%', background: 'var(--bg)',
           borderTopLeftRadius: 22, borderTopRightRadius: 22,
-          maxHeight: '90%', display: 'flex', flexDirection: 'column',
-          animation: 'slideUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1)',
+          maxHeight: '92%', display: 'flex', flexDirection: 'column',
+          animation: dragY > 0 ? 'none' : 'slideUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1)',
+          transform: dragY > 0 ? `translateY(${dragY}px)` : 'none',
+          transition: dragY === 0 ? 'transform 0.2s' : 'none',
         }}
       >
         {/* Drag handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
           <div style={{ width: 36, height: 4, borderRadius: 999, background: 'var(--card-border)' }}/>
         </div>
 
-        {/* Close button */}
-        <div style={{ position: 'absolute', top: 14, right: 14 }}>
-          <IconBtn label="Close" onClick={onClose}><Icons.Close size={16}/></IconBtn>
-        </div>
+        {/* Nav arrows */}
+        {rows.length > 1 && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '0 14px 6px', flexShrink: 0,
+          }}>
+            <button onClick={goPrev} disabled={idx === 0} style={navBtnStyle(idx === 0)}>
+              <Icons.ChevronLeft size={16}/>
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 600 }}>
+              {idx + 1} / {rows.length}
+            </span>
+            <button onClick={goNext} disabled={idx === rows.length - 1} style={navBtnStyle(idx === rows.length - 1)}>
+              <Icons.ChevronRight size={16}/>
+            </button>
+          </div>
+        )}
 
-        <div style={{ overflow: 'auto', padding: '8px 18px 24px' }}>
+        {/* Scrollable content */}
+        <div style={{ overflow: 'auto', padding: '0 18px 12px', flex: 1, minHeight: 0 }}>
           {/* Header */}
-          <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 14, marginTop: 4 }}>
             <CardThumb img={row.card.img} name={row.card.name} w={92} radius={9} glow/>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, color: 'var(--accent-solid)', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>
@@ -80,7 +142,7 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
 
           {/* Price card */}
           <div style={{
-            marginTop: 18, padding: 14, borderRadius: 14,
+            marginTop: 16, padding: 14, borderRadius: 14,
             background: 'var(--card-bg)', border: '1px solid var(--card-border)',
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -95,9 +157,8 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
               {t('pwa.cardmarketTrend')} · {range}
             </div>
 
-            {/* Range chips */}
             <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
-              {(Object.keys(RANGES) as Range[]).map(r => (
+              {RANGES.map(r => (
                 <button key={r} onClick={() => setRange(r)} style={{
                   flex: 1, padding: '6px 0', fontSize: 12, fontWeight: 600,
                   borderRadius: 8, border: '1px solid var(--card-border)',
@@ -108,7 +169,6 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
               ))}
             </div>
 
-            {/* Chart */}
             <div style={{ marginTop: 14, marginLeft: -4, marginRight: -4 }}>
               <Sparkline
                 data={values} w={310} h={104}
@@ -119,7 +179,6 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
               />
             </div>
 
-            {/* Stats */}
             <div style={{
               marginTop: 6, paddingTop: 12, borderTop: '1px solid var(--card-border)',
               display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
@@ -172,21 +231,36 @@ export function PwaCardDetail({ row, currency, t, onClose, onEdit, onDelete }: C
               }
             />
           </div>
+        </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <GhostButton onClick={onEdit} full>
-              <Icons.Edit size={15}/>{t('pwa.edit')}
-            </GhostButton>
-            <GhostButton onClick={onDelete} full style={{ color: 'var(--down)' }}>
-              <Icons.Trash size={15}/>{t('pwa.delete')}
-            </GhostButton>
-          </div>
+        {/* Bottom action bar */}
+        <div style={{
+          display: 'flex', gap: 8, padding: '12px 16px',
+          paddingBottom: 'max(env(safe-area-inset-bottom), 16px)',
+          borderTop: '1px solid var(--card-border)',
+          background: 'var(--bg)', flexShrink: 0,
+        }}>
+          <GhostButton onClick={() => onEdit(row)} full>
+            <Icons.Edit size={15}/>{t('pwa.edit')}
+          </GhostButton>
+          <GhostButton onClick={() => onDelete(row.uc.id)} full style={{ color: 'var(--down)' }}>
+            <Icons.Trash size={15}/>{t('pwa.delete')}
+          </GhostButton>
+          <GhostButton onClick={onClose} style={{ minWidth: 48, padding: '13px 14px' }}>
+            <Icons.Close size={16}/>
+          </GhostButton>
         </div>
       </div>
     </div>
   );
 }
+
+const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
+  width: 32, height: 32, borderRadius: 999,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'var(--pill-bg)', color: disabled ? 'var(--card-border)' : 'var(--fg)',
+  border: 'none', cursor: disabled ? 'default' : 'pointer', padding: 0,
+});
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

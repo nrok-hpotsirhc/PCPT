@@ -253,6 +253,13 @@ const translations = {
     'pwa.theme': 'Design',
     'pwa.dark': 'Dunkel',
     'pwa.light': 'Hell',
+    'pwa.currency': 'Währung',
+    'pwa.profile': 'Profil',
+    'pwa.profileName': 'Name',
+    'pwa.save': 'Speichern',
+    'pwa.cancel': 'Abbrechen',
+    'pwa.resetProfile': 'Profil zurücksetzen',
+    'pwa.resetConfirm': 'Wirklich zurücksetzen?',
   },
   en: {
     'app.title': 'Pokémon Card Tracker',
@@ -459,6 +466,13 @@ const translations = {
     'pwa.theme': 'Theme',
     'pwa.dark': 'Dark',
     'pwa.light': 'Light',
+    'pwa.currency': 'Currency',
+    'pwa.profile': 'Profile',
+    'pwa.profileName': 'Name',
+    'pwa.save': 'Save',
+    'pwa.cancel': 'Cancel',
+    'pwa.resetProfile': 'Reset Profile',
+    'pwa.resetConfirm': 'Really reset?',
   },
 } as const;
 

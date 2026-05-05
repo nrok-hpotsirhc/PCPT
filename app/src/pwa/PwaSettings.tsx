@@ -17,12 +17,23 @@ interface SettingsProps {
   t: TranslationFn;
   onImport: (cards: UserCard[]) => void;
   onLocaleToggle: () => void;
+  // new
+  isDark: boolean;
+  onThemeToggle: () => void;
+  activeCurrency: string;
+  onCurrencyToggle: () => void;
+  profileName: string;
+  onNameChange: (name: string) => void;
+  onReset: () => void;
 }
 
-export function PwaSettings({ rows, cards, userCards, currency, locale, t, onImport, onLocaleToggle }: SettingsProps) {
+export function PwaSettings({ rows, cards, userCards, currency, locale, t, onImport, onLocaleToggle, isDark, onThemeToggle, activeCurrency, onCurrencyToggle, profileName, onNameChange, onReset }: SettingsProps) {
   const [scrolled, setScrolled] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [importStatus, setImportStatus] = useState<{ success?: string; error?: string } | null>(null);
+  const [editName, setEditName] = useState(profileName);
+  const [nameDirty, setNameDirty] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
@@ -99,22 +110,63 @@ export function PwaSettings({ rows, cards, userCards, currency, locale, t, onImp
     >
       <TopBar title={t('pwa.settings')} scrolled={scrolled}/>
 
-      <div style={{ padding: '4px 16px 100px' }}>
-        {/* Profile / collection summary */}
+      <div style={{ padding: '4px 16px 24px' }}>
+        {/* Profile section */}
+        <SectionHeader label={t('pwa.profile')}/>
         <PwaCard padding={14} style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <div style={{
               width: 48, height: 48, borderRadius: 14,
               background: 'var(--accent-grad)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'white', fontWeight: 800, fontSize: 17, letterSpacing: -0.4,
-            }}>P</div>
+            }}>{(editName || 'P').charAt(0).toUpperCase()}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)' }}>Pokémon Tracker</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)' }}>{editName || 'Pokémon Tracker'}</div>
               <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
                 {rows.length} {t('pwa.cards')} · {fmtMoney(totalValue, currency)}
               </div>
             </div>
+          </div>
+          {/* Name edit */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={editName}
+              onChange={(e) => { setEditName(e.target.value); setNameDirty(true); }}
+              placeholder={t('pwa.profileName')}
+              style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--fg)', fontSize: 13, outline: 'none' }}
+            />
+            {nameDirty && (
+              <button
+                onClick={() => { onNameChange(editName); setNameDirty(false); }}
+                style={{ padding: '10px 14px', borderRadius: 10, border: 'none', background: 'var(--accent-grad)', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+              >{t('pwa.save')}</button>
+            )}
+          </div>
+          {/* Reset */}
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--card-border)', paddingTop: 12 }}>
+            {!resetConfirm ? (
+              <button onClick={() => setResetConfirm(true)} style={{
+                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                padding: '10px 12px', borderRadius: 10,
+                border: '1px solid rgba(248,113,113,0.35)',
+                background: 'rgba(248,113,113,0.08)', color: 'var(--down)',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}>
+                <Icons.Trash size={14}/>{t('pwa.resetProfile')}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { onReset(); setResetConfirm(false); }} style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 10, border: 'none',
+                  background: 'var(--down)', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}>{t('pwa.resetConfirm')}</button>
+                <button onClick={() => setResetConfirm(false)} style={{
+                  padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-border)',
+                  background: 'transparent', color: 'var(--fg-muted)', fontSize: 13, cursor: 'pointer',
+                }}>{t('pwa.cancel')}</button>
+              </div>
+            )}
           </div>
         </PwaCard>
 
@@ -183,6 +235,46 @@ export function PwaSettings({ rows, cards, userCards, currency, locale, t, onImp
         {/* Preferences */}
         <SectionHeader label={t('pwa.preferences')}/>
         <PwaCard padding={0} style={{ overflow: 'hidden' }}>
+          {/* Theme */}
+          <button onClick={onThemeToggle} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', padding: '14px 16px',
+            borderBottom: '1px solid var(--card-border)',
+            background: 'transparent', border: 'none', borderTopLeftRadius: 0, borderTopRightRadius: 0,
+            cursor: 'pointer', color: 'var(--fg)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-solid)' }}>
+                {isDark ? <Icons.Moon size={16}/> : <Icons.Sun size={16}/>}
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{t('pwa.theme')}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-muted)', fontSize: 13 }}>
+              <span>{isDark ? t('pwa.dark') : t('pwa.light')}</span>
+              <Icons.ChevronRight size={14}/>
+            </div>
+          </button>
+
+          {/* Currency */}
+          <button onClick={onCurrencyToggle} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', padding: '14px 16px',
+            borderBottom: '1px solid var(--card-border)',
+            background: 'transparent', border: 'none',
+            cursor: 'pointer', color: 'var(--fg)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-solid)' }}>
+                <Icons.Sliders size={16}/>
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{t('pwa.currency')}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-muted)', fontSize: 13 }}>
+              <span>{activeCurrency}</span>
+              <Icons.ChevronRight size={14}/>
+            </div>
+          </button>
+
           {/* Language */}
           <button onClick={onLocaleToggle} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
