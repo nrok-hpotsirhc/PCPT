@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { Icons } from './icons';
-import { Pill, PwaCard, Sparkline, CardThumb, TopBar, SectionLabel, GhostButton } from './ui';
+import { Pill, PwaCard, Sparkline, CardThumb, TopBar, SectionLabel } from './ui';
 import { fmtMoney, fmtMoneySigned, fmtPct, type PwaRow } from './utils';
 import type { TranslationFn } from './types';
 
@@ -11,11 +11,11 @@ interface DashboardProps {
   currency: string;
   t: TranslationFn;
   onRowClick: (row: PwaRow) => void;
+  onTotalClick: () => void;
 }
 
-export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) {
+export function PwaDashboard({ rows, currency, t, onRowClick, onTotalClick }: DashboardProps) {
   const [scrolled, setScrolled] = useState(false);
-  const [showChart, setShowChart] = useState(false);
 
   const total        = rows.reduce((s, r) => s + r.value, 0);
   const totalCost    = rows.reduce((s, r) => s + r.cost, 0);
@@ -42,7 +42,6 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
   const topCards = [...rows].sort((a, b) => b.value - a.value).slice(0, 4);
 
   return (
-    <>
     <div
       onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 8)}
       style={{ height: '100%', overflow: 'auto' }}
@@ -55,7 +54,7 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
           total={total} change24h={change24h} pnl={allTimePnl}
           pct={allTimePct} cardCount={cardCount}
           totalHistory={totalHistory} currency={currency} t={t}
-          onClick={() => setShowChart(true)}
+          onClick={onTotalClick}
         />
 
         {/* Card of the day */}
@@ -101,18 +100,6 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
         </PwaCard>
       </div>
     </div>
-    {showChart && (
-      <TotalChartModal
-        totalHistory={totalHistory}
-        total={total}
-        pnl={allTimePnl}
-        pct={allTimePct}
-        currency={currency}
-        t={t}
-        onClose={() => setShowChart(false)}
-      />
-    )}
-    </>
   );
 }
 
@@ -343,17 +330,21 @@ function ActivityRow({ icon, tone, text, time }: { icon: React.ReactNode; tone: 
   );
 }
 
-// ── Total Chart Modal ──────────────────────────────────────────────────────────
+// ── Total Chart Screen (fullscreen, exported for PwaApp) ───────────────────────
 
 type ChartRange = '1W' | '1M' | '3M' | 'MAX';
 const CHART_RANGES: ChartRange[] = ['1W', '1M', '3M', 'MAX'];
 
-function TotalChartModal({
+export interface TotalChartData {
+  totalHistory: number[];
+  total: number;
+  pnl: number;
+  pct: number;
+}
+
+export function TotalChartScreen({
   totalHistory, total, pnl, pct, currency, t, onClose,
-}: {
-  totalHistory: number[]; total: number; pnl: number; pct: number;
-  currency: string; t: TranslationFn; onClose: () => void;
-}) {
+}: TotalChartData & { currency: string; t: TranslationFn; onClose: () => void }) {
   const [chartRange, setChartRange] = useState<ChartRange>('1M');
   const [hoverIdx, setHoverIdx]     = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -394,29 +385,27 @@ function TotalChartModal({
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        background: 'rgba(0,0,0,0.55)',
-        display: 'flex', alignItems: 'flex-end',
-        animation: 'fadeIn 0.18s',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', background: 'var(--bg)',
-          borderTopLeftRadius: 24, borderTopRightRadius: 24,
-          paddingBottom: 'max(env(safe-area-inset-bottom),16px)',
-          animation: 'slideUp 0.25s cubic-bezier(0.2,0.9,0.3,1)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 999, background: 'var(--card-border)' }}/>
-        </div>
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 90,
+      background: 'var(--bg)', display: 'flex', flexDirection: 'column',
+      animation: 'slideUp 0.22s cubic-bezier(0.2,0.9,0.3,1)',
+    }}>
+      {/* Back button bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '14px 16px 0',
+        paddingTop: 'calc(14px + env(safe-area-inset-top, 0px))',
+      }}>
+        <button onClick={onClose} style={{
+          width: 36, height: 36, borderRadius: 999, border: 'none',
+          background: 'var(--pill-bg)', color: 'var(--fg)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}><Icons.ChevronLeft size={18}/></button>
+        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)' }}>{t('pwa.totalValue')}</span>
+      </div>
 
-        <div style={{ padding: '0 20px' }}>
+      {/* Chart body — scrollable */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px 24px' }}>
           <div style={{ textAlign: 'center', marginBottom: 8 }}>
             <div style={{ fontSize: 34, fontWeight: 800, color: 'var(--fg)', letterSpacing: -0.8 }}>
               {fmtMoney(displayVal, currency)}
@@ -462,13 +451,6 @@ function TotalChartModal({
               }}>{r}</button>
             ))}
           </div>
-
-          <div style={{ marginTop: 14 }}>
-            <GhostButton full onClick={onClose}>
-              <Icons.Close size={15}/> Schließen / Close
-            </GhostButton>
-          </div>
-        </div>
       </div>
     </div>
   );

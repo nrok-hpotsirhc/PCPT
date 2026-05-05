@@ -1,9 +1,9 @@
 // PwaApp — full standalone PWA experience with the new UIUX design
 // Only rendered when the app is installed as a PWA (display-mode: standalone)
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Icons } from './pwa/icons';
-import { PwaDashboard } from './pwa/PwaDashboard';
+import { PwaDashboard, TotalChartScreen } from './pwa/PwaDashboard';
 import { PwaPortfolio } from './pwa/PwaPortfolio';
 import { PwaAddCard } from './pwa/PwaAddCard';
 import { PwaScan } from './pwa/PwaScan';
@@ -11,7 +11,7 @@ import { PwaCardDetail } from './pwa/PwaCardDetail';
 import { PwaSettings } from './pwa/PwaSettings';
 import { toPwaRows, type PwaRow } from './pwa/utils';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
-import { addUserCard, updateUserCard, deleteUserCard } from '@/lib/card-store';
+import { addUserCard, updateUserCard, deleteUserCard, markLaunched } from '@/lib/card-store';
 import { useI18n } from '@/lib/i18n';
 import type { Card, UserCard } from '@/lib/types';
 
@@ -35,9 +35,24 @@ export function PwaApp() {
   const [isDark, setIsDark]       = useState(true);
   const [activeCurrency, setActiveCurrency] = useState<string>(() => localStorage.getItem('pwa-currency') ?? 'EUR');
   const [profileName, setProfileName] = useState<string>(() => localStorage.getItem('pwa-profile-name') ?? '');
+  const [showTotalChart, setShowTotalChart] = useState(false);
 
   const rows    = toPwaRows(rawRows);
   const currency = activeCurrency;
+
+  // Compute total chart data
+  const totalChartData = useMemo(() => {
+    const total     = rows.reduce((s, r) => s + r.value, 0);
+    const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+    const pnl       = total - totalCost;
+    const pct       = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+    const len = 31;
+    const history = Array<number>(len).fill(0);
+    rows.forEach(r => {
+      r.history.forEach((p, i) => { if (i < len) history[i] = (history[i] ?? 0) + p * r.uc.quantity; });
+    });
+    return { total, pnl, pct, totalHistory: history };
+  }, [rows]);
 
   // Apply PWA CSS variables on mount
   useEffect(() => {
@@ -153,7 +168,9 @@ export function PwaApp() {
       {/* Screens — flex-1 so tab bar is always pushed to bottom */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         <div style={{ height: '100%', display: tab === 'dashboard' ? 'block' : 'none' }}>
-          <PwaDashboard rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
+          <PwaDashboard rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}
+            onTotalClick={() => setShowTotalChart(true)}
+          />
         </div>
         <div style={{ height: '100%', display: tab === 'portfolio' ? 'block' : 'none' }}>
           <PwaPortfolio rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
@@ -199,9 +216,19 @@ export function PwaApp() {
                 setUserCards([]);
                 setProfileName('');
                 localStorage.removeItem('pwa-profile-name');
+                markLaunched(); // prevent re-seeding demo
               }}
             />
           </div>
+        )}
+
+        {/* Total chart fullscreen (within content area, above tab bar) */}
+        {showTotalChart && (
+          <TotalChartScreen
+            {...totalChartData}
+            currency={currency} t={tf}
+            onClose={() => setShowTotalChart(false)}
+          />
         )}
       </div>
 

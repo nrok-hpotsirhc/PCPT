@@ -4,7 +4,7 @@ import {
   loadUserCards,
   loadLatestPrices,
 } from '@/lib/data-loader';
-import { loadUserCardsLocal } from '@/lib/card-store';
+import { loadUserCardsLocal, isFirstLaunch, seedDemoPortfolio } from '@/lib/card-store';
 import { fetchCardsByIds } from '@/lib/pokemon-api';
 import { buildPortfolioRows } from '@/lib/price-utils';
 
@@ -34,9 +34,16 @@ export function usePortfolioData(): PortfolioData {
           loadLatestPrices(),
         ]);
 
-        // Prefer localStorage user cards, fallback to JSON file
+        // Prefer localStorage user cards; seed demo on first launch
         const localCards = loadUserCardsLocal();
-        const resolvedUserCards = localCards ?? userCardsData;
+        let resolvedUserCards: typeof userCardsData;
+        if (localCards !== null) {
+          resolvedUserCards = localCards;
+        } else if (isFirstLaunch()) {
+          resolvedUserCards = seedDemoPortfolio();
+        } else {
+          resolvedUserCards = userCardsData;
+        }
         setUserCards(resolvedUserCards);
         setLatestPrices(latestData);
 
