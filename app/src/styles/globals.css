@@ -49,3 +49,77 @@ th[data-sortable] {
 button, a {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ────────────────────────────────────────────────
+   PWA design tokens (set by PwaApp via JS, but
+   also defined here as fallbacks)
+   ──────────────────────────────────────────────── */
+:root {
+  --bg:              #0B0816;
+  --fg:              #F5F3FF;
+  --fg-muted:        rgba(232, 228, 255, 0.55);
+  --card-bg:         #15102A;
+  --card-border:     rgba(255, 255, 255, 0.07);
+  --card-shadow:     0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.3);
+  --input-bg:        #1A142F;
+  --pill-bg:         rgba(255, 255, 255, 0.06);
+  --pill-fg:         rgba(232, 228, 255, 0.70);
+  --ghost-bg:        rgba(255, 255, 255, 0.04);
+  --icon-btn-bg:     rgba(255, 255, 255, 0.05);
+  --topbar-scrolled: rgba(11, 8, 22, 0.78);
+  --up:              #34D399;
+  --down:            #F87171;
+  --tabbar-bg:       rgba(11, 8, 22, 0.85);
+  --accent-from:     #6366F1;
+  --accent-to:       #A855F7;
+  --accent-solid:    #7C5CFF;
+  --accent-soft:     rgba(124, 92, 255, 0.15);
+  --accent-grad:     linear-gradient(135deg, #6366F1 0%, #A855F7 100%);
+  --accent-shadow:   rgba(124, 92, 255, 0.35);
+}
+
+/* PWA animations */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.4; }
+}
+
+.pulse-dot {
+  animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%   { top: 8%; }
+  50%  { top: 88%; }
+  100% { top: 8%; }
+}
+
+.scanline {
+  animation: scan 1.4s ease-in-out infinite;
+}
+
+@keyframes skel {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skel {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
