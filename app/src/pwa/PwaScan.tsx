@@ -104,7 +104,7 @@ export function PwaScan({ cards, currency, t, onCardDetected, onManual }: ScanPr
 
   if (phase === 'permission') {
     return (
-      <div style={{ height: '100%', background: 'var(--bg)', color: 'var(--fg)', display: 'flex', flexDirection: 'column', paddingBottom: 84 }}>
+      <div style={{ height: '100%', background: 'var(--bg)', color: 'var(--fg)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 28px', textAlign: 'center' }}>
           <div style={{
             width: 88, height: 88, borderRadius: 26,

@@ -122,46 +122,55 @@ export function PwaApp() {
   }
 
   return (
-    <div style={{ background: 'var(--bg)', height: '100%', position: 'relative', overflow: 'hidden' }}>
-      {/* Screens */}
-      <div style={{ height: '100%', display: tab === 'dashboard' ? 'block' : 'none' }}>
-        <PwaDashboard rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
+    <div style={{
+      background: 'var(--bg)',
+      height: '100dvh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      paddingTop: 'env(safe-area-inset-top)',
+    }}>
+      {/* Screens — flex-1 so tab bar is always pushed to bottom */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ height: '100%', display: tab === 'dashboard' ? 'block' : 'none' }}>
+          <PwaDashboard rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
+        </div>
+        <div style={{ height: '100%', display: tab === 'portfolio' ? 'block' : 'none' }}>
+          <PwaPortfolio rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
+        </div>
+        {tab === 'add' && (
+          <div style={{ height: '100%' }}>
+            <PwaAddCard
+              cards={cards} currency={currency} t={tf}
+              prefilledCard={prefilledCard}
+              editCard={editCard}
+              onSave={handleSave}
+              onCancel={() => { setEditCard(null); setPrefilledCard(null); setTab('portfolio'); }}
+            />
+          </div>
+        )}
+        {tab === 'scan' && (
+          <div style={{ height: '100%' }}>
+            <PwaScan
+              cards={cards} currency={currency} t={tf}
+              onCardDetected={handleScanDetected}
+              onManual={() => setTab('add')}
+            />
+          </div>
+        )}
+        {tab === 'settings' && (
+          <div style={{ height: '100%' }}>
+            <PwaSettings
+              rows={rows} cards={cards} userCards={userCards}
+              currency={currency} locale={locale} t={tf}
+              onImport={handleImport}
+              onLocaleToggle={() => setLocale(locale === 'de' ? 'en' : 'de')}
+            />
+          </div>
+        )}
       </div>
-      <div style={{ height: '100%', display: tab === 'portfolio' ? 'block' : 'none' }}>
-        <PwaPortfolio rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}/>
-      </div>
-      {tab === 'add' && (
-        <div style={{ height: '100%' }}>
-          <PwaAddCard
-            cards={cards} currency={currency} t={tf}
-            prefilledCard={prefilledCard}
-            editCard={editCard}
-            onSave={handleSave}
-            onCancel={() => { setEditCard(null); setPrefilledCard(null); setTab('portfolio'); }}
-          />
-        </div>
-      )}
-      {tab === 'scan' && (
-        <div style={{ height: '100%' }}>
-          <PwaScan
-            cards={cards} currency={currency} t={tf}
-            onCardDetected={handleScanDetected}
-            onManual={() => setTab('add')}
-          />
-        </div>
-      )}
-      {tab === 'settings' && (
-        <div style={{ height: '100%' }}>
-          <PwaSettings
-            rows={rows} cards={cards} userCards={userCards}
-            currency={currency} locale={locale} t={tf}
-            onImport={handleImport}
-            onLocaleToggle={() => setLocale(locale === 'de' ? 'en' : 'de')}
-          />
-        </div>
-      )}
 
-      {/* Tab bar */}
+      {/* Tab bar — normal flow, always at bottom */}
       <PwaTabBar tab={tab} onChange={setTab} t={tf}/>
 
       {/* Detail sheet */}
@@ -190,13 +199,14 @@ function PwaTabBar({ tab, onChange, t }: { tab: Tab; onChange: (t: Tab) => void;
 
   return (
     <div style={{
-      position: 'absolute', left: 0, right: 0, bottom: 0,
-      paddingBottom: 22, paddingTop: 6, paddingLeft: 8, paddingRight: 8,
+        paddingBottom: 'max(env(safe-area-inset-bottom), 10px)',
+      paddingTop: 6, paddingLeft: 8, paddingRight: 8,
       background: 'var(--tabbar-bg)',
       backdropFilter: 'blur(20px) saturate(160%)',
       WebkitBackdropFilter: 'blur(20px) saturate(160%)',
       borderTop: '1px solid var(--card-border)',
       zIndex: 70,
+      flexShrink: 0,
       display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around',
     }}>
       {TABS.map(({ id, Icon, label, primary }) => {

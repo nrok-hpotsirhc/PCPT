@@ -74,7 +74,7 @@ export function PwaPortfolio({ rows, currency, t, onRowClick }: PortfolioProps) 
           subtitle={`${filtered.length} ${t('pwa.cards')} · ${fmtMoney(totalValue, currency)}`}
         />
 
-        <div style={{ padding: '4px 16px 140px' }}>
+          <div style={{ padding: '4px 16px 24px' }}>
           {/* Active filter chips */}
           {(query || sortBy !== 'value' || sortDir !== 'desc') && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>

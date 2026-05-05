@@ -299,8 +299,8 @@ export function PwaAddCard({ cards, currency, t, prefilledCard, editCard, onSave
       {/* Sticky save button */}
       {selected && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 84,
-          padding: '14px 16px 12px',
+          position: 'sticky', left: 0, right: 0, bottom: 0,
+          padding: '14px 16px 16px',
           background: 'linear-gradient(to top, var(--bg) 65%, transparent)',
           pointerEvents: 'none',
         }}>

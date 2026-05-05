@@ -47,7 +47,7 @@ export function PwaDashboard({ rows, currency, t, onRowClick }: DashboardProps) 
     >
       <TopBar title={t('pwa.dashboard')} scrolled={scrolled}/>
 
-      <div style={{ padding: '4px 16px 100px' }}>
+      <div style={{ padding: '4px 16px 24px' }}>
         {/* Hero total */}
         <HeroTotal
           total={total} change24h={change24h} pnl={allTimePnl}
