@@ -95,6 +95,7 @@ export function PwaCardDetail({ rows, initialIndex, currency, t, onClose, onEdit
           animation: dragY > 0 ? 'none' : 'slideUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1)',
           transform: dragY > 0 ? `translateY(${dragY}px)` : 'none',
           transition: dragY === 0 ? 'transform 0.2s' : 'none',
+          touchAction: 'pan-y',  // allow vertical scroll; prevent horizontal browser pan/nav
         }}
       >
         {/* Drag handle */}

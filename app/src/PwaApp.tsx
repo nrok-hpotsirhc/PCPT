@@ -54,6 +54,12 @@ export function PwaApp() {
     return { total, pnl, pct, totalHistory: history };
   }, [rows]);
 
+  // Lock app height once on mount so the keyboard never pushes the layout
+  useEffect(() => {
+    const h = window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${h}px`);
+  }, []);
+
   // Apply PWA CSS variables on mount
   useEffect(() => {
     const root = document.documentElement;
@@ -159,7 +165,7 @@ export function PwaApp() {
   return (
     <div style={{
       background: 'var(--bg)',
-      height: '100dvh',
+      height: 'var(--app-height, 100dvh)',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
