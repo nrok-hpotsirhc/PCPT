@@ -1,0 +1,38 @@
+{
+  "name": "Pokémon Karten Tracker",
+  "short_name": "PokéTracker",
+  "description": "Pokémon Sammelkarten-Portfolio: Werte verfolgen, Karten scannen",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "categories": ["entertainment", "finance"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Portfolio",
+      "url": "./#portfolio",
+      "description": "Deine Kartensammlung"
+    },
+    {
+      "name": "Scan",
+      "url": "./#scan",
+      "description": "Karte scannen"
+    }
+  ]
+}

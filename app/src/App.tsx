@@ -1,4 +1,4 @@
-import { Suspense, lazy, useId, useState, useCallback, useMemo } from 'react';
+﻿import { Suspense, lazy, useId, useState, useCallback, useMemo } from 'react';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { CardTable } from '@/components/CardTable';
 import { Dashboard } from '@/components/Dashboard';
@@ -8,6 +8,16 @@ import { formatCurrency, totalPortfolioValue } from '@/lib/price-utils';
 import { addUserCard, updateUserCard, deleteUserCard } from '@/lib/card-store';
 import { useI18n } from '@/lib/i18n';
 import type { UserCard, Card, PortfolioRow } from '@/lib/types';
+import {
+  LayoutDashboard,
+  BookOpen,
+  Plus,
+  FileUp,
+  ScanLine,
+  Globe,
+  Zap,
+  AlertTriangle,
+} from 'lucide-react';
 
 type Tab = 'dashboard' | 'portfolio' | 'add' | 'import' | 'scan';
 
@@ -19,6 +29,14 @@ const OcrScanner = lazy(() =>
   import('@/components/OcrScanner').then((mod) => ({ default: mod.OcrScanner })),
 );
 
+const TAB_ICONS: Record<Tab, React.ComponentType<{ className?: string }>> = {
+  dashboard: LayoutDashboard,
+  portfolio: BookOpen,
+  add: Plus,
+  import: FileUp,
+  scan: ScanLine,
+};
+
 export function App() {
   const { rows, cards, userCards, loading, error, lastSynced, setUserCards } = usePortfolioData();
   const { t, locale, setLocale } = useI18n();
@@ -26,16 +44,19 @@ export function App() {
   const [detailRow, setDetailRow] = useState<PortfolioRow | null>(null);
   const [editCard, setEditCard] = useState<UserCard | null>(null);
 
-  const TABS: { id: Tab; label: string; icon: string }[] = useMemo(() => [
-    { id: 'dashboard', label: t('tab.dashboard'), icon: '📊' },
-    { id: 'portfolio', label: t('tab.portfolio'), icon: '🗂️' },
-    { id: 'add', label: t('tab.add'), icon: '➕' },
-    { id: 'import', label: t('tab.import'), icon: '📄' },
-    { id: 'scan', label: t('tab.scan'), icon: '📷' },
-  ], [t]);
+  const TABS: { id: Tab; label: string }[] = useMemo(
+    () => [
+      { id: 'dashboard', label: t('tab.dashboard') },
+      { id: 'portfolio', label: t('tab.portfolio') },
+      { id: 'add', label: t('tab.add') },
+      { id: 'import', label: t('tab.import') },
+      { id: 'scan', label: t('tab.scan') },
+    ],
+    [t],
+  );
 
   const total = totalPortfolioValue(rows);
-  const currency = rows[0]?.currency ?? 'USD';
+  const currency = rows[0]?.currency ?? 'EUR';
 
   const handleAddCard = useCallback(
     (card: UserCard) => {
@@ -73,61 +94,58 @@ export function App() {
     [userCards, setUserCards],
   );
 
-  const handleScanDetected = useCallback(
-    (card: Card) => {
-      // Pre-fill form with detected card – switch to add tab with edit state
-      setEditCard({
-        id: '',
-        cardId: card.id,
-        owner: '',
-        condition: 'NM',
-        variant: 'holofoil',
-        quantity: 1,
-        addedAt: new Date().toISOString(),
-      });
-      setTab('add');
-    },
-    [],
-  );
+  const handleScanDetected = useCallback((card: Card) => {
+    setEditCard({
+      id: '',
+      cardId: card.id,
+      owner: '',
+      condition: 'NM',
+      variant: 'holofoil',
+      quantity: 1,
+      addedAt: new Date().toISOString(),
+    });
+    setTab('add');
+  }, []);
 
-  const handleRowClick = useCallback(
-    (row: PortfolioRow) => setDetailRow(row),
-    [],
-  );
+  const handleRowClick = useCallback((row: PortfolioRow) => setDetailRow(row), []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 dark:text-gray-100">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 dark:text-slate-100 flex flex-col">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">⚡</span>
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow">
+                <Zap className="w-4 h-4 text-white" />
+              </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
                   {t('app.title')}
                 </h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-none hidden sm:block">
                   {t('app.subtitle')}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setLocale(locale === 'de' ? 'en' : 'de')}
-                className="px-2 py-1 text-xs font-semibold border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300"
                 title={locale === 'de' ? 'Switch to English' : 'Auf Deutsch wechseln'}
               >
-                {locale === 'de' ? '🇬🇧 EN' : '🇩🇪 DE'}
+                <Globe className="w-3.5 h-3.5" />
+                {locale === 'de' ? 'EN' : 'DE'}
               </button>
               <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                <div className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
                   {formatCurrency(total, currency)}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {rows.length} {t('app.cards')} · {lastSynced
-                    ? `${t('app.synced')} ${new Date(lastSynced).toLocaleDateString(locale === 'de' ? 'de-DE' : 'en-US')}`
-                    : t('app.noSync')}
+                <div className="text-xs text-slate-500 dark:text-slate-400 leading-none">
+                  {rows.length} {t('app.cards')}
+                  {lastSynced
+                    ? ` · ${t('app.synced')} ${new Date(lastSynced).toLocaleDateString(locale === 'de' ? 'de-DE' : 'en-US')}`
+                    : ''}
                 </div>
               </div>
             </div>
@@ -135,57 +153,59 @@ export function App() {
         </div>
       </header>
 
-      {/* Tab Navigation */}
-      <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+      {/* Desktop Tab Nav */}
+      <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 hidden sm:block">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1 overflow-x-auto -mb-px">
-            {TABS.map((tabItem) => (
-              <button
-                key={tabItem.id}
-                onClick={() => setTab(tabItem.id)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  tab === tabItem.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <span>{tabItem.icon}</span> {tabItem.label}
-              </button>
-            ))}
+          <div className="flex gap-0 -mb-px">
+            {TABS.map((tabItem) => {
+              const Icon = TAB_ICONS[tabItem.id];
+              return (
+                <button
+                  key={tabItem.id}
+                  onClick={() => setTab(tabItem.id)}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    tab === tabItem.id
+                      ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tabItem.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-5 sm:px-6 lg:px-8 pb-24 sm:pb-6">
         {loading && (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-24">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            <span className="ml-3 text-gray-600 dark:text-gray-400">{t('loading')}</span>
+            <span className="ml-3 text-slate-500 dark:text-slate-400">{t('loading')}</span>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4 text-sm text-red-700 dark:text-red-300">
-            <strong>{t('error')}:</strong> {error}
+          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div><strong>{t('error')}:</strong> {error}</div>
           </div>
         )}
 
         {!loading && !error && (
           <>
             {tab === 'dashboard' && <Dashboard rows={rows} />}
-
-            {tab === 'portfolio' && (
-              rows.length > 0 ? (
+            {tab === 'portfolio' &&
+              (rows.length > 0 ? (
                 <CardTable rows={rows} onRowClick={handleRowClick} />
               ) : (
                 <EmptyState onAdd={() => setTab('add')} />
-              )
-            )}
-
+              ))}
             {tab === 'add' && (
               <div className="max-w-xl mx-auto">
-                <h2 className="text-lg font-semibold mb-4">
+                <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
                   {editCard ? t('form.editTitle') : t('form.addTitle')}
                 </h2>
                 <CardForm
@@ -196,19 +216,21 @@ export function App() {
                 />
               </div>
             )}
-
             {tab === 'import' && (
               <div className="max-w-xl mx-auto">
-                <h2 className="text-lg font-semibold mb-4">{t('import.title')}</h2>
+                <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+                  {t('import.title')}
+                </h2>
                 <Suspense fallback={<SectionLoader label={t('loading')} />}>
                   <ExcelImport onImport={handleImport} userCards={userCards} cards={cards} />
                 </Suspense>
               </div>
             )}
-
             {tab === 'scan' && (
-              <div className="max-w-xl mx-auto">
-                <h2 className="text-lg font-semibold mb-4">{t('scan.title')}</h2>
+              <div className="max-w-md mx-auto">
+                <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+                  {t('scan.title')}
+                </h2>
                 <Suspense fallback={<SectionLoader label={t('loading')} />}>
                   <OcrScanner cards={cards} onCardDetected={handleScanDetected} />
                 </Suspense>
@@ -217,6 +239,30 @@ export function App() {
           </>
         )}
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 z-30">
+        <div className="flex">
+          {TABS.map((tabItem) => {
+            const Icon = TAB_ICONS[tabItem.id];
+            const isActive = tab === tabItem.id;
+            return (
+              <button
+                key={tabItem.id}
+                onClick={() => setTab(tabItem.id)}
+                className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
+                  isActive
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : ''}`} />
+                {tabItem.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Card Detail Modal */}
       {detailRow && (
@@ -233,8 +279,8 @@ export function App() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 text-xs text-gray-400 text-center">
+      <footer className="hidden sm:block border-t border-slate-200 dark:border-slate-800 mt-2">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 text-xs text-slate-400 text-center">
           {t('footer')}
         </div>
       </footer>
@@ -245,10 +291,11 @@ export function App() {
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="text-center py-20 text-gray-500 dark:text-gray-400">
-      <p className="text-lg">{t('empty.title')}</p>
+    <div className="text-center py-24 text-slate-500 dark:text-slate-400">
+      <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-30" />
+      <p className="text-lg font-medium text-slate-700 dark:text-slate-300">{t('empty.title')}</p>
       <p className="text-sm mt-2">
-        <button onClick={onAdd} className="text-blue-600 hover:underline">
+        <button onClick={onAdd} className="text-blue-600 hover:underline font-medium">
           {t('empty.addCard')}
         </button>{' '}
         {t('empty.orImport')}
@@ -259,13 +306,12 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function SectionLoader({ label }: { label: string }) {
   const labelId = useId();
-
   return (
     <div
       role="status"
       aria-live="polite"
       aria-labelledby={labelId}
-      className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-10 text-sm text-gray-600 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
+      className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-10 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
     >
       <div aria-hidden="true" className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
       <span id={labelId} className="ml-3">{label}</span>

@@ -1,19 +1,32 @@
 @import 'tailwindcss';
 
 :root {
-  --color-gain: #16a34a;
-  --color-loss: #dc2626;
+  --color-gain: #10b981;
+  --color-loss: #ef4444;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* PWA – prevent text size adjustment on rotation */
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Respect iOS safe areas */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Dark mode for native select options */
 @media (prefers-color-scheme: dark) {
   option {
-    background-color: #1f2937;
-    color: #f3f4f6;
+    background-color: #1e293b;
+    color: #f1f5f9;
   }
 }
 
@@ -30,4 +43,9 @@ th[data-sortable] {
 .card-thumb:hover {
   transform: scale(1.5);
   z-index: 10;
+}
+
+/* Smooth transitions for interactive elements */
+button, a {
+  -webkit-tap-highlight-color: transparent;
 }

@@ -5,9 +5,19 @@ import { translateGermanName } from '@/lib/german-pokemon-names';
 import { searchCardsApi } from '@/lib/pokemon-api';
 import { useI18n } from '@/lib/i18n';
 import { loadCards } from '@/lib/data-loader';
+import {
+  Camera,
+  X,
+  RotateCcw,
+  Loader2,
+  ScanLine,
+  CheckCircle2,
+  AlertCircle,
+  ChevronRight,
+  ListFilter,
+} from 'lucide-react';
 
 interface OcrScannerProps {
-  /** Kept for API compatibility – not used directly in scan logic. */
   cards: Card[];
   onCardDetected: (card: Card) => void;
 }
@@ -19,19 +29,12 @@ const MIN_MODAL_FETCH = 50;
 const MAX_MODAL_FETCH = 250;
 const MAX_NAME_WORDS = 4;
 const MIN_NAME_LETTERS = 3;
+
 const NON_NAME_PREFIXES = new Set(['basis', 'basic', 'stage', 'stufe', 'evolution']);
 const NON_NAME_WORDS = new Set([...NON_NAME_PREFIXES, 'hp', 'kp', 'pokemon']);
 
-// ── ROI definitions (fractions of card width/height) ────────────────────────
-// Search the upper card area for the Pokémon name.  The region is wider than
-// the name itself to tolerate camera offset, but short enough to avoid the
-// card artwork which starts around 15-20 % from the top.
 const NAME_ROI = { x: 0.04, y: 0.01, w: 0.92, h: 0.15 };
 
-/**
- * Crop the center of the video frame to the Pokemon card portrait aspect ratio.
- * Returns the full card dimensions so ROIs can be extracted afterwards.
- */
 function captureCardCanvas(video: HTMLVideoElement, canvas: HTMLCanvasElement): boolean {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -60,19 +63,9 @@ function captureCardCanvas(video: HTMLVideoElement, canvas: HTMLCanvasElement): 
 }
 
 interface ROIOptions {
-  /** Upscale factor (default 3) */
   scale?: number;
 }
 
-/**
- * Extract a ROI from a source canvas into a new canvas with
- * preprocessing optimised for OCR accuracy.
- *
- * Pipeline: bilinear upscale → grayscale → contrast stretch.
- * Modern Tesseract's LSTM engine handles binarization internally;
- * feeding it a clean grayscale image produces better results than
- * a global Otsu threshold which destroys text on mixed-content ROIs.
- */
 function extractROI(
   src: HTMLCanvasElement,
   roi: { x: number; y: number; w: number; h: number },
@@ -90,12 +83,10 @@ function extractROI(
   roiCanvas.height = sh * scale;
   const ctx = roiCanvas.getContext('2d')!;
 
-  // Use bilinear smoothing for natural-looking upscaled text
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, sx, sy, sw, sh, 0, 0, roiCanvas.width, roiCanvas.height);
 
-  // ── Step 1: Convert to grayscale ──────────────────────────────────────
   const imageData = ctx.getImageData(0, 0, roiCanvas.width, roiCanvas.height);
   const d = imageData.data;
 
@@ -112,18 +103,10 @@ function extractROI(
     graySum += gray;
   }
 
-  // ── Step 2: Contrast stretch ──────────────────────────────────────────
-  // Map the darkest pixel to 0 and the brightest to 255 so Tesseract
-  // receives a full-range grayscale image.
   const range = grayMax - grayMin;
-
-  // Auto-detect inversion: if the ROI is predominantly dark (mean < 128)
-  // the text is likely light-on-dark and we must invert for Tesseract.
   const meanGray = graySum / pixelCount;
   const needsInvert = meanGray < 128;
 
-  // Only stretch when there is actual contrast; a uniform image (range=0)
-  // needs no transformation (or just inversion).
   if (range > 0) {
     const scaleFactor = 255 / range;
     for (let i = 0; i + 3 < d.length; i += 4) {
@@ -141,7 +124,6 @@ function extractROI(
   return roiCanvas;
 }
 
-/** Convert a canvas to a PNG Blob. */
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -151,9 +133,6 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-/**
- * Normalize a card name for exact lookup against OCR candidates.
- */
 function normalizeNameLookup(value: string): string {
   return value
     .normalize('NFD')
@@ -180,10 +159,6 @@ function mergeCards(primary: Card[], secondary: Card[]): Card[] {
   return Array.from(merged.values());
 }
 
-/**
- * Extract candidate name phrases from the OCR text for the name ROI.
- * Returns phrases ordered by top-to-bottom scan position, then by phrase size.
- */
 function extractNameCandidatesFromROI(raw: string): string[] {
   const lines = raw
     .split('\n')
@@ -193,7 +168,6 @@ function extractNameCandidatesFromROI(raw: string): string[] {
   const candidates = new Map<string, { lineIndex: number; wordCount: number; letters: number }>();
 
   for (const [lineIndex, line] of lines.entries()) {
-    // Remove noise characters that Tesseract sometimes injects
     let cleaned = line
       .replace(/[|_{}[\]<>~`@#$%^&*()+=]/g, ' ')
       .replace(/\b(?:(?:hp|kp)\s*\d+|\d+\s*(?:hp|kp))\b/gi, ' ')
@@ -201,8 +175,6 @@ function extractNameCandidatesFromROI(raw: string): string[] {
       .trim();
 
     if (cleaned.length < 2) continue;
-
-    // Skip lines that are clearly HP indicators or numbers
     if (/^\d+\s*(?:HP|KP)$/i.test(cleaned)) continue;
     if (/^(?:HP|KP)\s*\d+$/i.test(cleaned)) continue;
     if (/^\d+$/.test(cleaned)) continue;
@@ -229,11 +201,7 @@ function extractNameCandidatesFromROI(raw: string): string[] {
         const letters = countLetters(phrase);
         if (letters < MIN_NAME_LETTERS) continue;
         if (!candidates.has(phrase)) {
-          candidates.set(phrase, {
-            lineIndex,
-            wordCount: phraseWords.length,
-            letters,
-          });
+          candidates.set(phrase, { lineIndex, wordCount: phraseWords.length, letters });
         }
       }
     }
@@ -243,10 +211,8 @@ function extractNameCandidatesFromROI(raw: string): string[] {
     .sort((a, b) => {
       const lineDiff = a[1].lineIndex - b[1].lineIndex;
       if (lineDiff !== 0) return lineDiff;
-
       const wordDiff = b[1].wordCount - a[1].wordCount;
       if (wordDiff !== 0) return wordDiff;
-
       return b[1].letters - a[1].letters;
     })
     .map(([phrase]) => phrase);
@@ -290,12 +256,15 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const { t, tr } = useI18n();
+  const { t } = useI18n();
 
-  const handleSelectCard = useCallback((card: Card) => {
-    setShowAllModal(false);
-    onCardDetected(card);
-  }, [onCardDetected]);
+  const handleSelectCard = useCallback(
+    (card: Card) => {
+      setShowAllModal(false);
+      onCardDetected(card);
+    },
+    [onCardDetected],
+  );
 
   const searchPool = useMemo(() => mergeCards(catalogCards, cards), [catalogCards, cards]);
 
@@ -312,7 +281,6 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
   useEffect(() => {
     let mounted = true;
-
     void loadCards()
       .then((loadedCards) => {
         if (mounted) {
@@ -329,10 +297,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
           }
         }
       });
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [cards.length]);
 
   const startCamera = useCallback(async () => {
@@ -353,9 +318,9 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       }
       setStatus('camera');
     } catch {
-      setError('Camera access denied. Please allow camera permissions.');
+      setError(t('scan.cameraError'));
     }
-  }, []);
+  }, [t]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -366,7 +331,6 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
   const captureAndScan = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
-
     const ok = captureCardCanvas(videoRef.current, canvasRef.current);
     if (!ok) return;
     stopCamera();
@@ -374,24 +338,16 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
     try {
       const { createWorker, PSM } = await import('tesseract.js');
-
-      // Scan the upper card area where the name is expected.
       const nameCanvas = extractROI(canvasRef.current, NAME_ROI, { scale: 3 });
       const nameBlob = await canvasToBlob(nameCanvas);
-
-      // OCR the upper card section – use 'deu+eng' for German card name support.
       const nameWorker = await createWorker('deu+eng');
-      await nameWorker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-      });
-
+      await nameWorker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
       const nameResult = await nameWorker.recognize(nameBlob);
       await nameWorker.terminate();
 
       const nameRaw = nameResult.data.text.trim();
       const detectedMatch = findCardsForDetectedName(nameRaw, cardsByName);
       const candidatePreview = detectedMatch?.candidates.join(' | ') ?? '–';
-
       const debugText = [
         `[Top ROI] ${nameRaw}`,
         `→ Kandidaten: ${candidatePreview}`,
@@ -403,35 +359,26 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       if (detectedMatch && detectedMatch.matchedName) {
         const query = detectedMatch.matchedName;
         setOcrQuery(query);
-
-        // Show local matches immediately while the API request is in flight
         if (detectedMatch.cards.length > 0) {
           setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
           setAllResults(detectedMatch.cards);
           setTotalCount(detectedMatch.cards.length);
         }
         setStatus('result');
-
-        // Fetch from the API to get the real total count and top results
         try {
-          // Fetch one extra to determine whether there are more results beyond the visible set
           const initial = await searchCardsApi(query, MAX_VISIBLE_MATCHES + 1);
           const apiCards = initial.cards;
           const apiTotal = initial.totalCount;
-
           if (apiCards.length > 0) {
             setMatchedCards(apiCards.slice(0, MAX_VISIBLE_MATCHES));
             setTotalCount(apiTotal);
-            // Store the initial batch; full list is loaded on demand in handleShowAll
           } else if (detectedMatch.cards.length > 0) {
-            // API returned nothing – keep local catalog results
             setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
             setAllResults(detectedMatch.cards);
             setTotalCount(detectedMatch.cards.length);
           }
         } catch (e) {
           console.error('API search failed for OCR-detected name, using local results', e);
-          // API failed – keep local catalog results
           if (detectedMatch.cards.length > 0) {
             setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
             setAllResults(detectedMatch.cards);
@@ -449,7 +396,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       setError(err instanceof Error ? err.message : 'OCR failed');
       setStatus('idle');
     }
-  }, [cardsByName, stopCamera]);
+  }, [cardsByName, stopCamera, t]);
 
   const handleShowAll = useCallback(async () => {
     if (!ocrQuery) return;
@@ -462,7 +409,6 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       setTotalCount(result.totalCount);
     } catch (e) {
       console.error('Failed to load full OCR results from API', e);
-      // Keep whatever we already have in allResults
     } finally {
       setLoadingAll(false);
     }
@@ -483,8 +429,8 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
   return (
     <div className="space-y-4">
-      {/* Camera view – portrait 5:7 to match Pokemon card ratio */}
-      <div className="relative bg-black rounded-lg overflow-hidden mx-auto aspect-[5/7] max-w-xs">
+      {/* Camera viewfinder */}
+      <div className="relative bg-slate-900 rounded-2xl overflow-hidden mx-auto aspect-[5/7] max-w-xs shadow-lg">
         <video
           ref={videoRef}
           className={`w-full h-full object-cover ${status !== 'camera' ? 'hidden' : ''}`}
@@ -493,33 +439,66 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
         />
         <canvas ref={canvasRef} className="hidden" />
 
+        {/* Idle state */}
         {status === 'idle' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-            <span className="text-4xl mb-3">📷</span>
-            <p className="text-sm opacity-80">{t('scan.idle')}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white bg-slate-900">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center border-2 border-slate-600">
+              <Camera className="w-8 h-8 text-slate-400" />
+            </div>
+            <p className="text-sm text-slate-400 text-center px-6">{t('scan.idle')}</p>
           </div>
         )}
 
+        {/* Processing state */}
         {status === 'processing' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/70">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-3" />
-            <p className="text-sm">{t('scan.analyzing')}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white bg-slate-900/90">
+            <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+            <p className="text-sm text-slate-300">{t('scan.analyzing')}</p>
           </div>
         )}
 
+        {/* Camera active overlay */}
         {status === 'camera' && (
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-4 border-2 border-white/60 rounded-lg" />
-            {/* ROI overlay: scanned top area – derived from NAME_ROI */}
+            {/* Corner guide brackets */}
+            <div className="absolute inset-6">
+              {/* Top-left */}
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-white/80 rounded-tl-lg" />
+              {/* Top-right */}
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white/80 rounded-tr-lg" />
+              {/* Bottom-left */}
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white/80 rounded-bl-lg" />
+              {/* Bottom-right */}
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-white/80 rounded-br-lg" />
+            </div>
+
+            {/* Name ROI highlight */}
             <div
-              className="absolute border-2 border-yellow-400/80 rounded bg-yellow-400/10"
-              style={{ left: `${NAME_ROI.x * 100}%`, top: `${NAME_ROI.y * 100}%`, width: `${NAME_ROI.w * 100}%`, height: `${NAME_ROI.h * 100}%` }}
+              className="absolute border border-blue-400/60 bg-blue-400/10 rounded"
+              style={{
+                left: `${NAME_ROI.x * 100}%`,
+                top: `${NAME_ROI.y * 100}%`,
+                width: `${NAME_ROI.w * 100}%`,
+                height: `${NAME_ROI.h * 100}%`,
+              }}
             />
             <span
-              className="absolute text-yellow-300 text-[9px] font-bold"
-              style={{ left: `${(NAME_ROI.x + 0.01) * 100}%`, top: `${(NAME_ROI.y + 0.01) * 100}%` }}
-            >TOP</span>
-            <p className="absolute bottom-3 left-0 right-0 text-center text-white text-xs opacity-70">
+              className="absolute text-blue-300 text-[9px] font-bold tracking-wider"
+              style={{ left: `${(NAME_ROI.x + 0.02) * 100}%`, top: `${(NAME_ROI.y + 0.015) * 100}%` }}
+            >
+              NAME
+            </span>
+
+            {/* Animated scan line */}
+            <div
+              className="absolute left-6 right-6 h-px bg-blue-400/70"
+              style={{
+                top: `${(NAME_ROI.y + NAME_ROI.h / 2) * 100}%`,
+                animation: 'scanline 2s ease-in-out infinite',
+              }}
+            />
+
+            <p className="absolute bottom-3 left-0 right-0 text-center text-white/70 text-xs">
               {t('scan.position')}
             </p>
           </div>
@@ -527,12 +506,13 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       </div>
 
       {/* Controls */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         {status === 'idle' && (
           <button
             onClick={() => void startCamera()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all shadow"
           >
+            <Camera className="w-4 h-4" />
             {t('scan.startCamera')}
           </button>
         )}
@@ -540,23 +520,25 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
           <>
             <button
               onClick={() => void captureAndScan()}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 active:scale-95 transition-all shadow"
             >
+              <ScanLine className="w-4 h-4" />
               {t('scan.capture')}
             </button>
             <button
               onClick={reset}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50"
+              className="px-4 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              {t('scan.cancel')}
+              <X className="w-4 h-4" />
             </button>
           </>
         )}
         {(status === 'result' || status === 'processing') && (
           <button
             onClick={reset}
-            className="px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
           >
+            <RotateCcw className="w-4 h-4" />
             {t('scan.again')}
           </button>
         )}
@@ -564,55 +546,72 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+        <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
 
-      {/* OCR Result */}
+      {/* Result */}
       {status === 'result' && (
         <div className="space-y-3">
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('scan.ocrText')}</p>
-            <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ocrText || t('scan.noText')}</pre>
-          </div>
+          {/* OCR debug info – collapsible */}
+          {ocrText && (
+            <details className="bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <summary className="px-3 py-2.5 text-xs font-medium text-slate-500 cursor-pointer select-none">
+                {t('scan.ocrText')}
+              </summary>
+              <pre className="px-3 pb-3 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+                {ocrText}
+              </pre>
+            </details>
+          )}
 
           {matchedCards.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('scan.matches')}
-              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {t('scan.matches')}
+                </p>
+              </div>
               <div className="space-y-2">
                 {matchedCards.map((card: Card) => (
                   <button
                     key={card.id}
                     onClick={() => handleSelectCard(card)}
-                    className="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 text-left"
+                    className="w-full flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950 hover:border-blue-300 text-left transition-colors"
                   >
-                    <img src={card.images.small} alt="" className="w-10 h-14 object-contain" />
+                    <img src={card.images.small} alt="" className="w-10 h-14 object-contain rounded" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{card.name}</div>
-                      <div className="text-xs text-gray-500">
-                        <span className="font-semibold text-gray-700 dark:text-gray-300">{formatSetNumber(card.set, card.number)}</span> · {card.set.name} · {tr('rarity', card.rarity ?? '')}
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">{card.name}</div>
+                      <div className="text-xs text-slate-500">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">
+                          {formatSetNumber(card.set, card.number)}
+                        </span>
+                        {' · '}{card.set.name}
                       </div>
                     </div>
                     {(() => {
                       const price = getCardmarketPrice(card);
                       return price != null ? (
-                        <span className="text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
+                        <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                           {price.toFixed(2)} €
                         </span>
                       ) : null;
                     })()}
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                   </button>
                 ))}
               </div>
+
               {totalCount > MAX_VISIBLE_MATCHES && (
                 <button
                   type="button"
                   onClick={handleShowAll}
-                  className="mt-2 w-full px-3 py-2 text-center text-xs text-blue-600 dark:text-blue-400 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 hover:bg-blue-50 dark:hover:bg-blue-950 font-medium"
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950 font-medium transition-colors"
                 >
+                  <ListFilter className="w-3.5 h-3.5" />
                   +{totalCount - MAX_VISIBLE_MATCHES} {t('form.moreResults')}
                 </button>
               )}
@@ -620,44 +619,65 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
           )}
 
           {matchedCards.length === 0 && ocrText && (
-            <p className="text-sm text-gray-500">{t('scan.noMatch')}</p>
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-2">
+              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+              {t('scan.noMatch')}
+            </div>
           )}
         </div>
       )}
 
+      {/* All Results Modal */}
       {showAllModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowAllModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('form.allResults')}</h3>
-              <button type="button" onClick={() => setShowAllModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowAllModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                {t('form.allResults')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAllModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className="overflow-y-auto flex-1 p-2">
               {loadingAll ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span className="ml-2 text-sm text-gray-500">{t('form.loadingAll')}</span>
+                <div className="flex items-center justify-center py-12 gap-2">
+                  <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                  <span className="text-sm text-slate-500">{t('form.loadingAll')}</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="grid grid-cols-1 divide-y divide-slate-100 dark:divide-slate-800">
                   {allResults.map((card) => (
                     <button
                       key={card.id}
                       type="button"
                       onClick={() => handleSelectCard(card)}
-                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950 text-left"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-950 text-left transition-colors"
                     >
-                      <img src={card.images.small} alt="" className="w-10 h-14 object-contain" />
+                      <img src={card.images.small} alt="" className="w-10 h-14 object-contain rounded" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{card.name}</div>
-                        <div className="text-xs text-gray-500">
-                          <span className="font-semibold text-gray-700 dark:text-gray-300">{formatSetNumber(card.set, card.number)}</span> · {card.set.name} · {tr('rarity', card.rarity ?? '')}
+                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{card.name}</div>
+                        <div className="text-xs text-slate-500">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">
+                            {formatSetNumber(card.set, card.number)}
+                          </span>
+                          {' · '}{card.set.name}
                         </div>
                       </div>
                       {(() => {
                         const price = getCardmarketPrice(card);
                         return price != null ? (
-                          <span className="text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
+                          <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                             {price.toFixed(2)} €
                           </span>
                         ) : null;
@@ -670,6 +690,14 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
           </div>
         </div>
       )}
+
+      {/* Scan line animation */}
+      <style>{`
+        @keyframes scanline {
+          0%, 100% { transform: translateY(-8px); opacity: 0.4; }
+          50% { transform: translateY(8px); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
