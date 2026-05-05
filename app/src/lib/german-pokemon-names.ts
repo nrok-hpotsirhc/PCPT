@@ -133,21 +133,34 @@ export const DE_TO_EN: Record<string, string> = {
   'impergator': 'Feraligatr',
   'wiesor': 'Sentret',
   'wiesenior': 'Furret',
+  'hoothoot': 'Hoothoot',
   'noctuh': 'Noctowl',
+  'lediba': 'Ledyba',
+  'ledian': 'Ledian',
   'webarak': 'Spinarak',
   'iksbat': 'Crobat',
   'lampi': 'Chinchou',
+  'lanturn': 'Lanturn',
+  'pichu': 'Pichu',
   'pii': 'Cleffa',
   'fluffeluff': 'Igglybuff',
+  'togepi': 'Togepi',
+  'togetic': 'Togetic',
+  'natu': 'Natu',
+  'xatu': 'Xatu',
   'voltilamm': 'Mareep',
   'waaty': 'Flaaffy',
+  'ampharox': 'Ampharos',
   'blubella': 'Bellossom',
+  'marill': 'Marill',
+  'azumarill': 'Azumarill',
   'mogelbaum': 'Sudowoodo',
   'quaxo': 'Politoed',
   'hoppspross': 'Hoppip',
   'hubelupf': 'Skiploom',
   'papungha': 'Jumpluff',
   'griffel': 'Aipom',
+  'yanma': 'Yanma',
   'sonnkern': 'Sunkern',
   'sonnflora': 'Sunflora',
   'felino': 'Wooper',
@@ -169,23 +182,42 @@ export const DE_TO_EN: Record<string, string> = {
   'pottrott': 'Shuckle',
   'skaraborn': 'Heracross',
   'sniebel': 'Sneasel',
+  'teddiursa': 'Teddiursa',
+  'ursaring': 'Ursaring',
   'schneckmag': 'Slugma',
+  'magcargo': 'Magcargo',
   'quiekel': 'Swinub',
   'keifel': 'Piloswine',
   'corasonn': 'Corsola',
+  'remoraid': 'Remoraid',
+  'octillery': 'Octillery',
   'botogel': 'Delibird',
   'mantax': 'Mantine',
   'panzaeron': 'Skarmory',
   'hunduster': 'Houndour',
   'hundemon': 'Houndoom',
   'seedraking': 'Kingdra',
+  'phanpy': 'Phanpy',
+  'donphan': 'Donphan',
+  'porygon2': 'Porygon2',
   'damhirplex': 'Stantler',
   'farbeagle': 'Smeargle',
   'rabauz': 'Tyrogue',
   'kapoera': 'Hitmontop',
   'kussilla': 'Smoochum',
+  'elekid': 'Elekid',
+  'magby': 'Magby',
+  'miltank': 'Miltank',
   'heiteira': 'Blissey',
+  'raikou': 'Raikou',
+  'entei': 'Entei',
+  'suicune': 'Suicune',
+  'larvitar': 'Larvitar',
+  'pupitar': 'Pupitar',
   'despotar': 'Tyranitar',
+  'lugia': 'Lugia',
+  'ho-oh': 'Ho-Oh',
+  'celebi': 'Celebi',
 
   // ── Gen 3 (Hoenn #252–#386) ─────────────────────────────────────────────
   'geckarbor': 'Treecko',
@@ -294,17 +326,23 @@ export const DE_TO_EN: Record<string, string> = {
   'pliprin': 'Prinplup',
   'impoleon': 'Empoleon',
   'staralili': 'Starly',
+  'staravia': 'Staravia',
+  'staraptor': 'Staraptor',
   'bidiza': 'Bidoof',
   'bidifas': 'Bibarel',
   'zirpurze': 'Kricketot',
   'zirpeise': 'Kricketune',
   'sheinux': 'Shinx',
+  'luxio': 'Luxio',
   'luxtra': 'Luxray',
   'knospi': 'Budew',
+  'roselia': 'Roselia',
+  'roserade': 'Roserade',
   'koknodon': 'Cranidos',
   'rameidon': 'Rampardos',
   'schilterus': 'Shieldon',
   'bollterus': 'Bastiodon',
+  'burmy': 'Burmy',
   'burmadame': 'Wormadam',
   'moterpel': 'Mothim',
   'wadribie': 'Combee',
@@ -314,6 +352,7 @@ export const DE_TO_EN: Record<string, string> = {
   'kikugi': 'Cherubi',
   'kinoso': 'Cherrim',
   'schalellos': 'Shellos',
+  'gastrodon': 'Gastrodon',
   'ambidiffel': 'Ambipom',
   'driftlon': 'Drifloon',
   'drifzepeli': 'Drifblim',
@@ -325,7 +364,10 @@ export const DE_TO_EN: Record<string, string> = {
   'shnurgarst': 'Purugly',
   'klingplim': 'Chingling',
   'skunkapuh': 'Stunky',
+  'skuntank': 'Skuntank',
   'bronzel': 'Bronzor',
+  'bronzong': 'Bronzong',
+  'bonsly': 'Bonsly',
   'mobai': 'Bonsly',
   'pantimimi': 'Mime Jr.',
   'wonneira': 'Happiny',
@@ -335,6 +377,9 @@ export const DE_TO_EN: Record<string, string> = {
   'knarksel': 'Gabite',
   'knakrack': 'Garchomp',
   'mampfaxo': 'Munchlax',
+  'riolu': 'Riolu',
+  'lucario': 'Lucario',
+  'hippopotas': 'Hippopotas',
   'hippoterus': 'Hippowdon',
   'pionskora': 'Skorupi',
   'piondragi': 'Drapion',
@@ -350,17 +395,33 @@ export const DE_TO_EN: Record<string, string> = {
   'tangoloss': 'Tangrowth',
   'elevoltek': 'Electivire',
   'magbrant': 'Magmortar',
+  'togekiss': 'Togekiss',
+  'yanmega': 'Yanmega',
   'folipurba': 'Leafeon',
   'glaziola': 'Glaceon',
+  'porygon-z': 'Porygon-Z',
   'skorgro': 'Gliscor',
   'mamutel': 'Mamoswine',
+  'porygon z': 'Porygon-Z',
   'galagladi': 'Gallade',
   'voluminas': 'Probopass',
   'zwirfinst': 'Dusknoir',
   'frosdedje': 'Froslass',
+  'rotom': 'Rotom',
   'selfe': 'Uxie',
   'vesprit': 'Mesprit',
   'tobutz': 'Azelf',
+  'dialga': 'Dialga',
+  'palkia': 'Palkia',
+  'giratina': 'Giratina',
+  'heatran': 'Heatran',
+  'regigigas': 'Regigigas',
+  'cresselia': 'Cresselia',
+  'phione': 'Phione',
+  'manaphy': 'Manaphy',
+  'darkrai': 'Darkrai',
+  'shaymin': 'Shaymin',
+  'arceus': 'Arceus',
 
   // ── Gen 5 (Unova #494–#649) ─────────────────────────────────────────────
   'serpifeu': 'Snivy',
@@ -896,6 +957,47 @@ export function translateGermanName(query: string): string | null {
       const englishName = DE_TO_EN[twoTokensLower]!;
       const rest = tokens.slice(2).join(' ');
       return rest ? `${englishName} ${rest}` : englishName;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Same as translateGermanName but also tries fuzzy / prefix matching.
+ * Used by the scanner where OCR may produce slightly garbled text.
+ *
+ * Fuzzy rules:
+ *  1. Forward: OCR appended noise   – "garadosu" starts with DB key "garados" → Gyarados
+ *  2. Reverse: OCR truncated name   – "karpado" is prefix of DB key "karpador" (≤2 chars short) → Magikarp
+ */
+export function fuzzyTranslateGermanName(query: string): string | null {
+  // Try exact match first
+  const exact = translateGermanName(query);
+  if (exact !== null) return exact;
+
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  const tokens = trimmed.split(/\s+/);
+  const firstName = tokens[0]!;
+  const firstLower = firstName.toLowerCase();
+  if (firstLower.length < 3) return null;
+
+  const suffix = tokens.slice(1).join(' ');
+
+  // 1. Forward prefix: OCR text starts with a known DB key ("garadosu" → "garados")
+  for (const [key, english] of Object.entries(DE_TO_EN)) {
+    if (key.length >= 4 && firstLower.startsWith(key)) {
+      return suffix ? `${english} ${suffix}` : english;
+    }
+  }
+
+  // 2. Reverse prefix: known DB key starts with OCR text (OCR cut off ≤2 chars)
+  if (firstLower.length >= 4) {
+    for (const [key, english] of Object.entries(DE_TO_EN)) {
+      if (key.length > firstLower.length && key.length - firstLower.length <= 2 && key.startsWith(firstLower)) {
+        return suffix ? `${english} ${suffix}` : english;
+      }
     }
   }
 

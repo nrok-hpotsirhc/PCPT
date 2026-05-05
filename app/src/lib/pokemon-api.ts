@@ -1,5 +1,5 @@
 import type { Card } from './types';
-import { translateGermanName } from './german-pokemon-names';
+import { fuzzyTranslateGermanName } from './german-pokemon-names';
 
 const API_BASE = 'https://api.pokemontcg.io/v2';
 const CARD_CACHE_KEY = 'pokemon-tracker-card-cache';
@@ -79,8 +79,8 @@ export async function searchCardsApi(
 ): Promise<SearchResult> {
   if (!query.trim()) return { cards: [], totalCount: 0 };
 
-  // Translate German Pokémon name to English if applicable
-  const trimmed = translateGermanName(query.trim()) ?? query.trim();
+  // Translate German Pokémon name to English (with fuzzy prefix matching for OCR noise)
+  const trimmed = fuzzyTranslateGermanName(query.trim()) ?? query.trim();
   let q: string;
 
   // Check if query matches "SET_CODE NUMBER" pattern (e.g. "PAL 072")
@@ -103,14 +103,43 @@ export async function searchCardsApi(
     q = `name:"${escaped}*" OR number:"${escaped}"`;
   }
 
-  const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${pageSize}&select=id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer,cardmarket`;
+  const SELECT = 'id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer,cardmarket';
+  const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${pageSize}&select=${SELECT}`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 
   const json = (await res.json()) as { data: Card[]; totalCount: number };
-
   cacheCards(json.data);
+
+  // ── Fallback 1: strip suffixes (EX, GX, V, etc.) and retry with first word only ──
+  if (json.data.length === 0 && !setMatch) {
+    const firstWord = trimmed.split(/\s+/)[0]!;
+    if (firstWord.length >= 3 && firstWord !== trimmed) {
+      const escaped2 = firstWord.replace(/"/g, '');
+      const res2 = await fetch(`${API_BASE}/cards?q=${encodeURIComponent(`name:"${escaped2}*"`)}&pageSize=${pageSize}&select=${SELECT}`);
+      if (res2.ok) {
+        const json2 = (await res2.json()) as { data: Card[]; totalCount: number };
+        if (json2.data.length > 0) {
+          cacheCards(json2.data);
+          return { cards: json2.data, totalCount: json2.totalCount };
+        }
+      }
+    }
+
+    // ── Fallback 2: unquoted / broader wildcard (catches OCR partial reads) ──
+    if (trimmed.length >= 3) {
+      const base = trimmed.split(/\s+/)[0]!.replace(/"/g, '');
+      const res3 = await fetch(`${API_BASE}/cards?q=${encodeURIComponent(`name:${base}*`)}&pageSize=${pageSize}&select=${SELECT}`);
+      if (res3.ok) {
+        const json3 = (await res3.json()) as { data: Card[]; totalCount: number };
+        if (json3.data.length > 0) {
+          cacheCards(json3.data);
+          return { cards: json3.data, totalCount: json3.totalCount };
+        }
+      }
+    }
+  }
 
   return {
     cards: json.data,
