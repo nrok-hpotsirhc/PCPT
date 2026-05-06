@@ -1,5 +1,5 @@
-// PWA Card Detail bottom sheet — price chart, stats, edit/delete
-// Swipe down to close · swipe left/right to navigate between cards
+﻿// PWA Card Detail bottom sheet â€” price chart, stats, edit/delete
+// Swipe down to close Â· swipe left/right to navigate between cards
 
 import { useState, useRef, useCallback } from 'react';
 import { Icons } from './icons';
@@ -12,7 +12,7 @@ interface CardDetailProps {
   initialIndex: number;  // which row to show first
   currency: string;
   t: TranslationFn;
-  priceTargets: Record<string, number>;  // ucId → target EUR price
+  priceTargets: Record<string, number>;  // ucId â†’ target EUR price
   onSetTarget: (ucId: string, target: number | null) => void;
   onClose: () => void;
   onEdit: (row: PwaRow) => void;
@@ -21,7 +21,7 @@ interface CardDetailProps {
 
 type Range = '7d' | '30d' | '90d';
 const RANGES: Range[] = ['7d', '30d', '90d'];
-const RANGE_DAYS: Record<Range, number> = { '7d': 7, '30d': 30, '90d': 30 };
+const RANGE_DAYS: Record<Range, number> = { '7d': 7, '30d': 30, '90d': 90 };
 
 export function PwaCardDetail({ rows, initialIndex, currency, t, priceTargets, onSetTarget, onClose, onEdit, onDelete }: CardDetailProps) {
   const [idx, setIdx]     = useState(initialIndex);
@@ -130,7 +130,7 @@ export function PwaCardDetail({ rows, initialIndex, currency, t, priceTargets, o
             <CardThumb img={row.card.img} name={row.card.name} w={92} radius={9} glow/>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, color: 'var(--accent-solid)', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>
-                {row.card.set} · #{row.card.number}
+                {row.card.set} Â· #{row.card.number}
               </div>
               <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--fg)', marginTop: 4, letterSpacing: -0.4, lineHeight: 1.15 }}>
                 {row.card.name}
@@ -157,7 +157,7 @@ export function PwaCardDetail({ rows, initialIndex, currency, t, priceTargets, o
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
-              {t('pwa.cardmarketTrend')} · {range}
+              {t('pwa.cardmarketTrend')} Â· {range}
             </div>
 
             <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
@@ -210,7 +210,7 @@ export function PwaCardDetail({ rows, initialIndex, currency, t, priceTargets, o
                 </span>}
               />
             )}
-            <DetailRow label={t('pwa.quantity')} value={`×${row.uc.quantity}`}/>
+            <DetailRow label={t('pwa.quantity')} value={`Ã—${row.uc.quantity}`}/>
             {row.uc.purchasePrice !== undefined && (
               <DetailRow
                 label={t('pwa.purchasedFor')}
@@ -218,7 +218,7 @@ export function PwaCardDetail({ rows, initialIndex, currency, t, priceTargets, o
                   <span>
                     {fmtMoney(row.uc.purchasePrice, currency)}
                     {row.uc.purchaseDate && (
-                      <span style={{ color: 'var(--fg-muted)', fontWeight: 500 }}> · {row.uc.purchaseDate}</span>
+                      <span style={{ color: 'var(--fg-muted)', fontWeight: 500 }}> Â· {row.uc.purchaseDate}</span>
                     )}
                   </span>
                 }
@@ -299,7 +299,7 @@ function DetailRow({ label, value, last }: { label: string; value: React.ReactNo
   );
 }
 
-// ── Kursziel ──────────────────────────────────────────────────────────────────
+// â”€â”€ Kursziel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PriceTargetSection({
   ucId, currentPrice, target, currency, onSetTarget,
@@ -347,13 +347,13 @@ function PriceTargetSection({
           <span style={{
             fontSize: 11, fontWeight: 700, color: 'var(--up)',
             background: 'rgba(52,211,153,0.15)', padding: '2px 8px', borderRadius: 999,
-          }}>✓ Erreicht!</span>
+          }}>âœ“ Erreicht!</span>
         )}
         <button onClick={startEdit} style={{
           background: 'none', border: 'none', cursor: 'pointer',
           color: 'var(--fg-muted)', padding: '2px 4px', fontSize: 12,
         }}>
-          {target !== null ? 'Ändern' : '+ Setzen'}
+          {target !== null ? 'Ã„ndern' : '+ Setzen'}
         </button>
       </div>
 
@@ -364,7 +364,7 @@ function PriceTargetSection({
             value={raw}
             onChange={e => setRaw(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') setEditing(false); }}
-            placeholder="Zielpreis in € (leer = löschen)"
+            placeholder="Zielpreis in â‚¬ (leer = lÃ¶schen)"
             style={{ ...inputStyle, flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 14 }}
           />
           <button onClick={confirm} style={{

@@ -102,7 +102,7 @@ function Sidebar({ tab, onChange, isDark, onTheme, locale, onLocale, totalValue,
   locale: string; onLocale: () => void;
   totalValue: number; currency: string; cardCount: number;
 }) {
-  const profileName = localStorage.getItem('pwa-profile-name') || 'Christoph';
+  const profileName = localStorage.getItem('pwa-profile-name') || '';
   const fmtMoney = (v: number) => {
     const sym = currency === 'USD' ? '$' : '€';
     return v >= 1000
@@ -274,13 +274,16 @@ export function App() {
   const [editCard, setEditCard]     = useState<UserCard | null>(null);
   const [prefilledCard, setPrefilledCard] = useState<Card | null>(null);
   const [showTotalChart, setShowTotalChart] = useState(false);
-  const [isDark, setIsDark]         = useState(() => {
-    const saved = localStorage.getItem('pcpt-theme');
-    return saved ? saved === 'dark' : true;
+  // "pcpt-theme-manual" is only set when the user explicitly toggles.
+  // Without it we follow the OS preference (prefers-color-scheme).
+  const [isDark, setIsDark] = useState(() => {
+    const manual = localStorage.getItem('pcpt-theme-manual');
+    if (manual !== null) return manual === 'dark';
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
   });
   const [isDesktop, setIsDesktop]   = useState(() => window.innerWidth >= 900);
   const [activeCurrency, setActiveCurrency] = useState(() => localStorage.getItem('pwa-currency') ?? 'EUR');
-  const [profileName, setProfileName] = useState(() => localStorage.getItem('pwa-profile-name') ?? 'Christoph');
+  const [profileName, setProfileName] = useState(() => localStorage.getItem('pwa-profile-name') ?? '');
   const [priceTargets, setPriceTargets] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('pwa-price-targets') ?? '{}') as Record<string, number>; }
     catch { return {}; }
@@ -300,11 +303,19 @@ export function App() {
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
   const cardCount  = rows.reduce((s, r) => s + r.uc.quantity, 0);
 
-  // Persist & apply theme
+  // Apply CSS variables whenever isDark changes
+  useEffect(() => { applyTheme(isDark); }, [isDark]);
+
+  // Follow OS dark/light changes — only when no manual override is set
   useEffect(() => {
-    applyTheme(isDark);
-    localStorage.setItem('pcpt-theme', isDark ? 'dark' : 'light');
-  }, [isDark]);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('pcpt-theme-manual')) setIsDark(e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     const fn = () => setIsDesktop(window.innerWidth >= 900);
@@ -394,7 +405,11 @@ export function App() {
             currency={activeCurrency} locale={locale} t={t as TranslationFn}
             onImport={handleImport}
             onLocaleToggle={() => setLocale(locale === 'de' ? 'en' : 'de')}
-            isDark={isDark} onThemeToggle={() => setIsDark(d => !d)}
+            isDark={isDark} onThemeToggle={() => setIsDark(d => {
+              const next = !d;
+              localStorage.setItem('pcpt-theme-manual', next ? 'dark' : 'light');
+              return next;
+            })}
             activeCurrency={activeCurrency}
             onCurrencyToggle={() => {
               const next = activeCurrency === 'EUR' ? 'USD' : 'EUR';
@@ -444,7 +459,11 @@ export function App() {
       <div style={{ height: '100vh', width: '100vw', display: 'flex', background: 'var(--bg)', color: 'var(--fg)', overflow: 'hidden' }}>
         <Sidebar
           tab={tab} onChange={setTab}
-          isDark={isDark} onTheme={() => setIsDark(d => !d)}
+          isDark={isDark} onTheme={() => setIsDark(d => {
+            const next = !d;
+            localStorage.setItem('pcpt-theme-manual', next ? 'dark' : 'light');
+            return next;
+          })}
           locale={locale} onLocale={() => setLocale(locale === 'de' ? 'en' : 'de')}
           totalValue={totalValue} currency={activeCurrency} cardCount={cardCount}
         />

@@ -1,4 +1,4 @@
-// PwaApp — full standalone PWA experience with the new UIUX design
+﻿// PwaApp â€” full standalone PWA experience with the new UIUX design
 // Only rendered when the app is installed as a PWA (display-mode: standalone)
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
@@ -33,7 +33,13 @@ export function PwaApp() {
   const [detailRow, setDetailRow] = useState<PwaRow | null>(null);
   const [editCard, setEditCard]   = useState<UserCard | null>(null);
   const [prefilledCard, setPrefilledCard] = useState<Card | null>(null);
-  const [isDark, setIsDark]       = useState(true);
+  // "pcpt-theme-manual" is only set when the user explicitly toggles.
+  // Without it we follow the OS preference (prefers-color-scheme).
+  const [isDark, setIsDark] = useState(() => {
+    const manual = localStorage.getItem('pcpt-theme-manual');
+    if (manual !== null) return manual === 'dark';
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+  });
   const [activeCurrency, setActiveCurrency] = useState<string>(() => localStorage.getItem('pwa-currency') ?? 'EUR');
   const [profileName, setProfileName] = useState<string>(() => localStorage.getItem('pwa-profile-name') ?? '');
   const [showTotalChart, setShowTotalChart] = useState(false);
@@ -67,6 +73,17 @@ export function PwaApp() {
     });
     return { total, pnl, pct, totalHistory: history };
   }, [rows]);
+
+  // Follow OS dark/light changes — only when no manual override is set
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('pcpt-theme-manual')) setIsDark(e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // Lock app height once on mount so the keyboard never pushes the layout
   useEffect(() => {
@@ -171,7 +188,7 @@ export function PwaApp() {
         }}>
           <Icons.Spark size={22} style={{ color: 'white' }}/>
         </div>
-        <span style={{ fontSize: 13 }}>Loading…</span>
+        <span style={{ fontSize: 13 }}>Loadingâ€¦</span>
       </div>
     );
   }
@@ -185,7 +202,7 @@ export function PwaApp() {
       overflow: 'hidden',
       paddingTop: 'env(safe-area-inset-top)',
     }}>
-      {/* Screens — flex-1 so tab bar is always pushed to bottom */}
+      {/* Screens â€” flex-1 so tab bar is always pushed to bottom */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         <div style={{ height: '100%', display: tab === 'dashboard' ? 'block' : 'none' }}>
           <PwaDashboard rows={rows} currency={currency} t={tf} onRowClick={setDetailRow}
@@ -224,7 +241,11 @@ export function PwaApp() {
               onImport={handleImport}
               onLocaleToggle={() => setLocale(locale === 'de' ? 'en' : 'de')}
               isDark={isDark}
-              onThemeToggle={() => setIsDark(d => !d)}
+              onThemeToggle={() => setIsDark(d => {
+                const next = !d;
+                localStorage.setItem('pcpt-theme-manual', next ? 'dark' : 'light');
+                return next;
+              })}
               activeCurrency={activeCurrency}
               onCurrencyToggle={() => setActiveCurrency(c => {
                 const next = c === 'EUR' ? 'USD' : 'EUR';
@@ -237,6 +258,7 @@ export function PwaApp() {
                 setUserCards([]);
                 setProfileName('');
                 localStorage.removeItem('pwa-profile-name');
+                localStorage.removeItem('pcpt-theme-manual');
                 markLaunched(); // prevent re-seeding demo
               }}
             />
@@ -253,7 +275,7 @@ export function PwaApp() {
         )}
       </div>
 
-      {/* Tab bar — normal flow, always at bottom */}
+      {/* Tab bar â€” normal flow, always at bottom */}
       <PwaTabBar tab={tab} onChange={setTab} t={tf}/>
 
       {/* Detail sheet */}
@@ -278,7 +300,7 @@ export function PwaApp() {
   );
 }
 
-// ── Tab Bar ───────────────────────────────────────────────────────────────────
+// â”€â”€ Tab Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PwaTabBar({ tab, onChange, t }: { tab: Tab; onChange: (t: Tab) => void; t: (k: string) => string }) {
   const TABS: { id: Tab; Icon: typeof Icons.Home; label: string; primary?: boolean }[] = [

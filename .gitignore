@@ -1,0 +1,12 @@
+# Local GitHub Copilot / agent config — not part of the repo
+.github/prompts/
+
+# Build output
+app/dist/
+
+# Dependencies
+app/node_modules/
+
+# Editor
+.vscode/
+*.code-workspace

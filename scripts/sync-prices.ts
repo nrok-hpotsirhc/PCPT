@@ -1,7 +1,7 @@
 /**
  * Price Sync Script
  * Runs via GitHub Actions to fetch latest prices from pokemontcg.io
- * and write them to /data/prices-latest.json + /data/prices/YYYY-MM-DD.json
+ * and write them to /data/prices-latest.json and /data/price-history.json
  */
 
 import * as fs from 'fs';
