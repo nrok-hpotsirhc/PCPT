@@ -1,4 +1,4 @@
-import type { Card, UserCard, PriceSnapshot } from './types';
+import type { Card, UserCard, PriceSnapshot, PriceHistoryFile } from './types';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -18,6 +18,11 @@ export function loadUserCards(): Promise<UserCard[]> {
 
 export function loadLatestPrices(): Promise<PriceSnapshot> {
   return fetchJson<PriceSnapshot>('prices-latest.json');
+}
+
+export function loadPriceHistory(): Promise<PriceHistoryFile> {
+  return fetchJson<PriceHistoryFile>('price-history.json')
+    .catch(() => ({ updatedAt: '', history: {} } as PriceHistoryFile));
 }
 
 export function loadPriceSnapshot(date: string): Promise<PriceSnapshot | null> {

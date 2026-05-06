@@ -117,6 +117,25 @@ async function fetchCardPrices(cardIds: string[]): Promise<Map<string, PriceEntr
   return results;
 }
 
+interface HistoryEntry {
+  url: string;
+  d: string[];
+  p: number[];
+}
+
+interface PriceHistoryFile {
+  updatedAt: string;
+  history: Record<string, HistoryEntry>;
+}
+
+function loadPriceHistory(): PriceHistoryFile {
+  const histPath = path.join(DATA_DIR, 'price-history.json');
+  if (fs.existsSync(histPath)) {
+    return JSON.parse(fs.readFileSync(histPath, 'utf-8')) as PriceHistoryFile;
+  }
+  return { updatedAt: '', history: {} };
+}
+
 async function main() {
   // Read current user-cards to know which card IDs to fetch
   const userCardsPath = path.join(DATA_DIR, 'user-cards.json');
@@ -141,20 +160,41 @@ async function main() {
     prices: Object.fromEntries(prices),
   };
 
-  // Write latest
+  // Write prices-latest.json (still used by the app for full price detail)
   const latestPath = path.join(DATA_DIR, 'prices-latest.json');
   fs.writeFileSync(latestPath, JSON.stringify(snapshot, null, 2));
   console.log(`Written ${latestPath}`);
 
-  // Write daily archive
+  // Append today's trendPrice to price-history.json (single file, no daily archives)
   const today = new Date().toISOString().slice(0, 10);
-  const pricesDir = path.join(DATA_DIR, 'prices');
-  if (!fs.existsSync(pricesDir)) {
-    fs.mkdirSync(pricesDir, { recursive: true });
+  const phFile = loadPriceHistory();
+
+  for (const [cardId, entry] of prices) {
+    const trend = entry.cardmarket?.prices?.trendPrice;
+    if (!trend || trend <= 0) continue;
+
+    const url = entry.cardmarket?.url ?? '';
+
+    if (!phFile.history[cardId]) {
+      phFile.history[cardId] = { url, d: [], p: [] };
+    }
+
+    const hist = phFile.history[cardId]!;
+    const existing = hist.d.indexOf(today);
+    if (existing >= 0) {
+      // Update today's point (re-run same day)
+      hist.p[existing] = trend;
+    } else {
+      hist.d.push(today);
+      hist.p.push(trend);
+    }
+    hist.url = url;
   }
-  const archivePath = path.join(pricesDir, `${today}.json`);
-  fs.writeFileSync(archivePath, JSON.stringify(snapshot, null, 2));
-  console.log(`Written ${archivePath}`);
+
+  phFile.updatedAt = new Date().toISOString();
+  const histPath = path.join(DATA_DIR, 'price-history.json');
+  fs.writeFileSync(histPath, JSON.stringify(phFile, null, 2));
+  console.log(`Updated ${histPath} (${Object.keys(phFile.history).length} cards)`);
 
   console.log(`Done! Synced ${prices.size}/${cardIds.length} cards.`);
 }

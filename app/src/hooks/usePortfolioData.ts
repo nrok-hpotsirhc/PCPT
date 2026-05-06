@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Card, UserCard, PriceSnapshot, PortfolioRow } from '@/lib/types';
+import type { Card, UserCard, PriceSnapshot, PortfolioRow, PriceHistoryFile } from '@/lib/types';
 import {
   loadUserCards,
   loadLatestPrices,
+  loadPriceHistory,
 } from '@/lib/data-loader';
 import { loadUserCardsLocal, saveUserCardsLocal, isFirstLaunch, seedDemoPortfolio } from '@/lib/card-store';
 import { fetchCardsByIds, evictFromCache } from '@/lib/pokemon-api';
@@ -14,6 +15,7 @@ interface PortfolioData {
   userCards: UserCard[];
   setUserCards: (cards: UserCard[]) => void;
   latestPrices: PriceSnapshot | null;
+  priceHistory: PriceHistoryFile | null;
   loading: boolean;
   isSyncing: boolean;
   error: string | null;
@@ -24,6 +26,7 @@ export function usePortfolioData(): PortfolioData {
   const [cards, setCards] = useState<Card[]>([]);
   const [userCards, setUserCardsState] = useState<UserCard[]>([]);
   const [latestPrices, setLatestPrices] = useState<PriceSnapshot | null>(null);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryFile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +41,10 @@ export function usePortfolioData(): PortfolioData {
   useEffect(() => {
     async function load() {
       try {
-        const latestData = await loadLatestPrices();
+        const [latestData, historyData] = await Promise.all([
+          loadLatestPrices(),
+          loadPriceHistory(),
+        ]);
 
         // Always prefer localStorage; seed demo on first launch
         const localCards = loadUserCardsLocal();
@@ -52,6 +58,7 @@ export function usePortfolioData(): PortfolioData {
         }
         setUserCardsState(resolvedUserCards);
         setLatestPrices(latestData);
+        setPriceHistory(historyData);
 
         const uniqueCardIds = [...new Set(resolvedUserCards.map((uc) => uc.cardId))];
         if (uniqueCardIds.length > 0) {
@@ -127,6 +134,7 @@ export function usePortfolioData(): PortfolioData {
     userCards,
     setUserCards,
     latestPrices,
+    priceHistory,
     loading,
     isSyncing,
     error,

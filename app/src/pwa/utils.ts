@@ -1,6 +1,6 @@
 // Data utilities and type adapters for the PWA design
 
-import type { PortfolioRow, Card, UserCard } from '@/lib/types';
+import type { PortfolioRow, Card, UserCard, PriceHistoryEntry } from '@/lib/types';
 
 // ── PWA Row (adapted from PortfolioRow for the new design) ────────────────────
 
@@ -34,7 +34,24 @@ export interface PwaRow {
   history: number[];
 }
 
-/** Generates a smooth 90-point price history (≈3 months) from avg30/avg7/current */
+/**
+ * Builds a price history array for the sparkline graph.
+ * Uses real recorded trendPrice data when available; falls back to
+ * a synthetic 90-point estimate built from avg30/avg7/current.
+ */
+function buildHistoryArray(
+  entry: PriceHistoryEntry | undefined,
+  current: number,
+  avg7: number | null,
+  avg30: number | null,
+): number[] {
+  if (entry && entry.p.length >= 2) {
+    return [...entry.p]; // real historical data — no fabrication
+  }
+  return generateHistory(current, avg7, avg30);
+}
+
+/** Fallback: smooth 90-point synthetic history from avg30/avg7/current */
 function generateHistory(current: number, avg7: number | null, avg30: number | null): number[] {
   const c   = current > 0 ? current : 0.01;
   const a7  = (avg7  ?? c) > 0 ? (avg7  ?? c) : c;
@@ -64,7 +81,7 @@ function generateHistory(current: number, avg7: number | null, avg30: number | n
 }
 
 /** Convert a PCPT PortfolioRow into the PwaRow format */
-export function toPwaRow(row: PortfolioRow): PwaRow {
+export function toPwaRow(row: PortfolioRow, historyEntry?: PriceHistoryEntry): PwaRow {
   const { userCard: uc, card, currentPrice, lowPrice, avg1, avg7, avg30 } = row;
   const trend     = currentPrice ?? 0;
   const change24h = trend - (avg1 ?? trend);
@@ -100,12 +117,15 @@ export function toPwaRow(row: PortfolioRow): PwaRow {
     cost,
     pnl,
     pnlPct,
-    history: generateHistory(trend, avg7, avg30),
+    history: buildHistoryArray(historyEntry, trend, avg7, avg30),
   };
 }
 
-export function toPwaRows(rows: PortfolioRow[]): PwaRow[] {
-  return rows.map(toPwaRow);
+export function toPwaRows(
+  rows: PortfolioRow[],
+  priceHistory?: Record<string, PriceHistoryEntry> | null,
+): PwaRow[] {
+  return rows.map(r => toPwaRow(r, priceHistory?.[r.card.id]));
 }
 
 // ── Currency formatting ───────────────────────────────────────────────────────

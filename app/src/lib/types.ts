@@ -149,3 +149,16 @@ export function getCardmarketPrice(card: Card, variant: CardVariant = 'normal'):
   }
   return cm.trendPrice ?? cm.averageSellPrice ?? null;
 }
+
+// ── Preisverlauf (kompaktes Format) ──
+
+export interface PriceHistoryEntry {
+  url: string;
+  d: string[];    // ISO-Daten, älteste zuerst
+  p: number[];    // trendPrice (EUR) pro Datum
+}
+
+export interface PriceHistoryFile {
+  updatedAt: string;
+  history: Record<string, PriceHistoryEntry>;
+}

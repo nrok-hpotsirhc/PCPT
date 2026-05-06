@@ -266,7 +266,7 @@ function MobileTabBar({ tab, onChange, locale }: { tab: Tab; onChange: (t: Tab) 
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export function App() {
-  const { rows: rawRows, cards, userCards, loading, setUserCards } = usePortfolioData();
+  const { rows: rawRows, cards, userCards, loading, setUserCards, priceHistory } = usePortfolioData();
   const { t, locale, setLocale } = useI18n();
   const [tab, setTab]               = useState<Tab>('dashboard');
   const [detailRow, setDetailRow]   = useState<PwaRow | null>(null);
@@ -282,7 +282,7 @@ export function App() {
   const [activeCurrency, setActiveCurrency] = useState(() => localStorage.getItem('pwa-currency') ?? 'EUR');
   const [profileName, setProfileName] = useState(() => localStorage.getItem('pwa-profile-name') ?? 'Christoph');
 
-  const rows = toPwaRows(rawRows);
+  const rows = toPwaRows(rawRows, priceHistory?.history);
 
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
   const cardCount  = rows.reduce((s, r) => s + r.uc.quantity, 0);

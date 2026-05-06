@@ -27,7 +27,7 @@ const ACCENT = {
 };
 
 export function PwaApp() {
-  const { rows: rawRows, cards, userCards, loading, isSyncing, setUserCards, lastSynced } = usePortfolioData();
+  const { rows: rawRows, cards, userCards, loading, isSyncing, setUserCards, lastSynced, priceHistory } = usePortfolioData();
   const { t, locale, setLocale } = useI18n();
   const [tab, setTab]             = useState<Tab>('dashboard');
   const [detailRow, setDetailRow] = useState<PwaRow | null>(null);
@@ -38,7 +38,7 @@ export function PwaApp() {
   const [profileName, setProfileName] = useState<string>(() => localStorage.getItem('pwa-profile-name') ?? '');
   const [showTotalChart, setShowTotalChart] = useState(false);
 
-  const rows    = toPwaRows(rawRows);
+  const rows    = toPwaRows(rawRows, priceHistory?.history);
   const currency = activeCurrency;
 
   // Compute total chart data
