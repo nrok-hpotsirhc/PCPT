@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Card, UserCard, PriceSnapshot, PortfolioRow, PriceHistoryFile } from '@/lib/types';
 import {
   loadUserCards,
@@ -6,7 +6,7 @@ import {
   loadPriceHistory,
 } from '@/lib/data-loader';
 import { loadUserCardsLocal, saveUserCardsLocal, isFirstLaunch, seedDemoPortfolio } from '@/lib/card-store';
-import { fetchCardsByIds, evictFromCache } from '@/lib/pokemon-api';
+import { fetchCardsByIds } from '@/lib/pokemon-api';
 import { buildPortfolioRows } from '@/lib/price-utils';
 
 interface PortfolioData {
@@ -28,15 +28,11 @@ export function usePortfolioData(): PortfolioData {
   const [latestPrices, setLatestPrices] = useState<PriceSnapshot | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryFile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
-  // Keep refs so callbacks always see latest values
   const cardsRef = useRef<Card[]>([]);
   cardsRef.current = cards;
-  const userCardsRef = useRef<UserCard[]>([]);
-  userCardsRef.current = userCards;
 
   useEffect(() => {
     async function load() {
@@ -65,11 +61,10 @@ export function usePortfolioData(): PortfolioData {
           const cardsData = await fetchCardsByIds(uniqueCardIds);
           setCards(cardsData);
         }
-        setLastSynced(new Date());
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data');
       } finally {
-        setLastSynced(prev => prev ?? new Date());
+        setLastSynced(new Date());
         setLoading(false);
       }
     }
@@ -77,44 +72,14 @@ export function usePortfolioData(): PortfolioData {
     void load();
   }, []);
 
-  // ── Periodic price refresh ──────────────────────────────────────────────────
-  const refreshPrices = useCallback(async () => {
-    const ids = [...new Set(userCardsRef.current.map((uc) => uc.cardId))];
-    if (ids.length === 0) return;
-    setIsSyncing(true);
-    evictFromCache(ids);
-    try {
-      const fresh = await fetchCardsByIds(ids);
-      setCards(fresh);
-      setLastSynced(new Date());
-    } catch { /* silently ignore – stale data stays */ } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Refresh every 5 minutes
-    const interval = setInterval(() => { void refreshPrices(); }, 5 * 60 * 1000);
-    // Refresh when tab / PWA becomes visible again
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshPrices(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [refreshPrices]);
-
   /**
    * Public setter — persists to localStorage and fetches API metadata
    * for any card IDs not yet loaded into the cards state.
    */
   const setUserCards = useCallback((newUserCards: UserCard[]) => {
     setUserCardsState(newUserCards);
-    // Persist on-device (addUserCard/updateUserCard already call this,
-    // but calling again here is safe and ensures the hook always saves)
     saveUserCardsLocal(newUserCards);
 
-    // Fetch metadata for newly added card IDs not yet in cards state
     const existingIds = new Set(cardsRef.current.map((c) => c.id));
     const missingIds = [...new Set(newUserCards.map((uc) => uc.cardId))].filter(
       (id) => !existingIds.has(id),
@@ -122,11 +87,14 @@ export function usePortfolioData(): PortfolioData {
     if (missingIds.length > 0) {
       fetchCardsByIds(missingIds)
         .then((fetched) => setCards((prev) => [...prev, ...fetched]))
-        .catch(() => {/* ignore – card will just show without price data */});
+        .catch(() => { /* card shows without metadata until next load */ });
     }
   }, []);
 
-  const rows = buildPortfolioRows(userCards, cards, latestPrices);
+  const rows = useMemo(
+    () => buildPortfolioRows(userCards, cards, latestPrices),
+    [userCards, cards, latestPrices],
+  );
 
   return {
     rows,
@@ -136,7 +104,7 @@ export function usePortfolioData(): PortfolioData {
     latestPrices,
     priceHistory,
     loading,
-    isSyncing,
+    isSyncing: false,
     error,
     lastSynced,
   };
